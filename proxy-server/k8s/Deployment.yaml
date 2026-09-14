@@ -1,0 +1,43 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy-server-deployment
+  labels:
+    app: proxy-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy-server
+  template:
+    metadata:
+      labels:
+        app: proxy-server
+    spec:
+      containers:
+        - name: proxy-server
+          image: docker.artifactory.eng.nimblestorage.com/paisha/proxy-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          env:
+            - name: S3_SVC_URL
+              value: "cxo-s3-cluster52.lab.nimblestorage.com:80"
+            - name: AN_SVC_URL
+              value: "anonymizer-service.default.svc.cluster.local:10666"
+            - name: POSTGRESDB_ENDPOINT
+              value: "postgres.default.svc.cluster.local:5432"
+            - name: POSTGRES_DB
+              value: pii
+            - name: POSTGRES_USER
+              value: admin
+            - name: POSTGRES_PASSWORD
+              value: admin

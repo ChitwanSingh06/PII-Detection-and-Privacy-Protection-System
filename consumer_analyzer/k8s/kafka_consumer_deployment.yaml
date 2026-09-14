@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-pii-consumer
+  namespace: kafka
+  labels:
+    app: kafka-pii-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-pii-consumer
+  template:
+    metadata:
+      labels:
+        app: kafka-pii-consumer
+    spec:
+      containers:
+        - name: kafka-pii-consumer
+          image: docker.artifactory.eng.nimblestorage.com/singhmad/kafka-pii-consumer:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "r1-kafka-broker-0-external.kafka.svc.cluster.local:9094"
+            - name: KAFKA_TOPIC
+              value: "fastobject.di.s3.events"
+            - name: KAFKA_USERNAME
+              value: "user1"
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: r1-kafka-user-passwords
+                  key: client-passwords
+            - name: REDIS_HOST
+              value: "redis.default.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_QUEUE
+              value: "kafka_notifications"

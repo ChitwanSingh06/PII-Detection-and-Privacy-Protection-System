@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pii-analyser
+  labels:
+    app: pii-analyser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pii-analyser
+  template:
+    metadata:
+      labels:
+        app: pii-analyser
+    spec:
+      containers:
+        - name: pii-analyser
+          image: docker.artifactory.eng.nimblestorage.com/singhmad/pii-analyser:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: REDIS_PORT
+              value: "6379"
+

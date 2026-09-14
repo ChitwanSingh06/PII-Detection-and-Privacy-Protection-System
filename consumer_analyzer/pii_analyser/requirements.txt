@@ -1,0 +1,6 @@
+boto3
+psycopg2-binary
+redis
+python-dotenv
+presidio-analyzer
+botocore

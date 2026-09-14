@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package pii_anonymizer;
+
+import "google/protobuf/struct.proto";
+
+service PIIAnonymizerService {
+  rpc AnonymizeObject (AnonymizeObjectRequest) returns (AnonymizeObjectResponse);
+}
+
+message Policy {
+  string entityType = 1;
+  string operatorName = 2;
+  google.protobuf.Struct operatorParams = 3;
+}
+
+message AnonymizeObjectRequest {
+    string bucketName = 1;
+    string objectKey = 2;
+    bytes objectData = 3;
+    repeated Policy policy_map = 4;
+}
+
+message AnonymizeObjectResponse {
+    bytes updatedObjectData = 1;
+    int32 objectLength = 2;
+}

@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anonymizer-deployment
+  labels:
+    app: anonymizer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anonymizer
+  template:
+    metadata:
+      labels:
+        app: anonymizer
+    spec:
+      containers:
+        - name: anonymizer
+          image: docker.artifactory.eng.nimblestorage.com/singhmad/pii_anonymizer:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 10666
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          env:
+            - name: POSTGRESDB_ENDPOINT
+              value: "pgdb:5432"

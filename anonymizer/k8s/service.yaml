@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: anonymizer-service
+  labels:
+    app: anonymizer
+spec:
+  selector:
+    app: anonymizer
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 10666
+      targetPort: 10666
+  type: ClusterIP
