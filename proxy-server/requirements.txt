@@ -1,7 +1,16 @@
+<<<<<<< HEAD
 asyncpg==0.30.0
 grpcio-tools==1.75.0
 sqlalchemy==2.0.20
 uvicorn==0.23.2
 fastapi==0.100.0
 httpx==0.24.1
+=======
+grpcio==1.75.0
+grpcio-tools==1.75.0
+sqlalchemy==2.0.20
+aiosqlite==0.20.0
+uvicorn==0.23.2
+fastapi==0.100.0
+>>>>>>> d7328bf (changed proj)
 pydantic==2.7.2

@@ -1,0 +1,12 @@
+fastapi==0.100.0
+uvicorn==0.23.2
+pydantic==2.7.2
+sqlalchemy==2.0.20
+aiosqlite==0.20.0
+grpcio==1.75.0
+grpcio-tools==1.75.0
+grpcio-reflection==1.75.0
+presidio-analyzer
+presidio-anonymizer
+python-dotenv
+spacy

@@ -1,5 +1,6 @@
 import os
 import logging
+<<<<<<< HEAD
 import boto3
 import psycopg2
 import json
@@ -64,20 +65,77 @@ class S3Handler:
             logging.error(f"Error fetching S3 object {object_key} from bucket {bucket_name}: {e}")
             return None
 
+=======
+import json
+import sqlite3
+import sys
+from pathlib import Path
+from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
+from dotenv import load_dotenv
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from config import (  # noqa: E402
+    SQLITE_PATH,
+    STORAGE_ROOT,
+    PII_SCORE_THRESHOLD,
+    SPACY_MODEL,
+)
+
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+
+
+class LocalStorageHandler:
+    def __init__(self):
+        self.root = Path(os.getenv("STORAGE_ROOT", STORAGE_ROOT))
+
+    def get_object_text(self, bucket_name, object_key):
+        try:
+            path = (self.root / bucket_name / object_key).resolve()
+            if not str(path).startswith(str(self.root.resolve())):
+                logging.error("Rejected path outside storage root")
+                return None
+            logging.info(f"Reading object {object_key} from bucket {bucket_name}")
+            return path.read_text(encoding="utf-8")
+        except Exception as e:
+            logging.error(f"Error reading local object {object_key} from bucket {bucket_name}: {e}")
+            return None
+
+
+>>>>>>> d7328bf (changed proj)
 class PIIAnalyzer:
     _engine = None
 
     def __init__(self):
         if PIIAnalyzer._engine is None:
             logging.info("Initializing AnalyzerEngine")
+<<<<<<< HEAD
             PIIAnalyzer._engine = AnalyzerEngine()
+=======
+            configuration = {
+                "nlp_engine_name": "spacy",
+                "models": [{"lang_code": "en", "model_name": os.getenv("SPACY_MODEL", SPACY_MODEL)}],
+            }
+            provider = NlpEngineProvider(nlp_configuration=configuration)
+            nlp_engine = provider.create_engine()
+            PIIAnalyzer._engine = AnalyzerEngine(nlp_engine=nlp_engine)
+>>>>>>> d7328bf (changed proj)
         self.engine = PIIAnalyzer._engine
 
     def analyze(self, text):
         try:
             logging.info("Running PII analysis")
+<<<<<<< HEAD
             score_threshold = float(os.getenv('PII_SCORE_THRESHOLD', '0.6'))
             results = self.engine.analyze(text=text, entities=[], language='en')
+=======
+            score_threshold = float(os.getenv("PII_SCORE_THRESHOLD", str(PII_SCORE_THRESHOLD)))
+            results = self.engine.analyze(text=text, entities=[], language="en")
+>>>>>>> d7328bf (changed proj)
             filtered = [
                 {
                     "type": r.entity_type,
@@ -85,7 +143,12 @@ class PIIAnalyzer:
                     "end": r.end,
                     "score": r.score,
                 }
+<<<<<<< HEAD
                 for r in results if r.score >= score_threshold
+=======
+                for r in results
+                if r.score >= score_threshold
+>>>>>>> d7328bf (changed proj)
             ]
             logging.info(f"Filtered PII entities (score >= {score_threshold})")
             return filtered
@@ -93,6 +156,7 @@ class PIIAnalyzer:
             logging.error(f"Error during PII analysis: {e}")
             return []
 
+<<<<<<< HEAD
 class PostgresDB:
     def __init__(self):
         self.db_params = {
@@ -101,39 +165,77 @@ class PostgresDB:
             'password': os.getenv('PG_PASSWORD'),
             'host': os.getenv('PG_HOST')
         }
+=======
+
+class SqlitePiiDB:
+    def __init__(self):
+        self.db_path = os.getenv("SQLITE_PATH", SQLITE_PATH)
+>>>>>>> d7328bf (changed proj)
 
     def store_pii_results(self, bucket_name, object_key, pii_entities):
         try:
             logging.info(f"Storing PII results for {object_key} in bucket {bucket_name}")
+<<<<<<< HEAD
             conn = psycopg2.connect(**self.db_params)
             cur = conn.cursor()
             cur.execute(
                 "INSERT INTO pii_objects (bucket_name, object_key, pii_entities) VALUES (%s, %s, %s)",
                 (bucket_name, object_key, json.dumps(pii_entities))
+=======
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO pii_objects (bucket_name, object_key, pii_entities)
+                VALUES (?, ?, ?)
+                ON CONFLICT(bucket_name, object_key)
+                DO UPDATE SET pii_entities=excluded.pii_entities
+                """,
+                (bucket_name, object_key, json.dumps(pii_entities)),
+>>>>>>> d7328bf (changed proj)
             )
             conn.commit()
             cur.close()
             conn.close()
+<<<<<<< HEAD
         except psycopg2.errors.UniqueViolation:
             logging.warning(f"Duplicate entry for {bucket_name}, {object_key}. Skipping insert.")
         except Exception as e:
             logging.error(f"Postgres error: {e}")
+=======
+        except Exception as e:
+            logging.error(f"SQLite error: {e}")
+>>>>>>> d7328bf (changed proj)
 
 
 class PIIProcessor:
     def __init__(self):
+<<<<<<< HEAD
         self.s3 = S3Handler()
         self.analyzer = PIIAnalyzer()
         self.db = PostgresDB()
 
     def process(self, bucket_name, object_key):
         text = self.s3.get_object_text(bucket_name, object_key)
+=======
+        self.storage = LocalStorageHandler()
+        self.analyzer = PIIAnalyzer()
+        self.db = SqlitePiiDB()
+
+    def process(self, bucket_name, object_key):
+        text = self.storage.get_object_text(bucket_name, object_key)
+        if text is None:
+            logging.error(f"Skipping analysis; object not found: {bucket_name}/{object_key}")
+            return
+>>>>>>> d7328bf (changed proj)
         pii_entities = self.analyzer.analyze(text)
         self.db.store_pii_results(bucket_name, object_key, pii_entities)
         logging.info(f"PII entities stored: {pii_entities}")
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     from dotenv import load_dotenv
     load_dotenv()
     print("Starting PII analyser...")
@@ -152,3 +254,8 @@ if __name__ == "__main__":
             logging.error(f"Error processing {bucket_name}, {object_key}: {e}")
 
 
+=======
+    load_dotenv()
+    print("PII analyser is invoked automatically after local uploads.")
+    print("To analyze an existing object: PIIProcessor().process(bucket, key)")
+>>>>>>> d7328bf (changed proj)

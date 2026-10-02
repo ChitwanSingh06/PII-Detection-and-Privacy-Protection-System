@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 psycopg2-binary
+=======
+python-dotenv
+>>>>>>> d7328bf (changed proj)

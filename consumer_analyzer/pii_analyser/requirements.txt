@@ -1,6 +1,11 @@
+<<<<<<< HEAD
 boto3
 psycopg2-binary
 redis
 python-dotenv
 presidio-analyzer
 botocore
+=======
+python-dotenv
+presidio-analyzer
+>>>>>>> d7328bf (changed proj)
