@@ -2,6 +2,7 @@ import logging
 import json
 from pb.anonymizer import anonymizer_pb2_grpc
 from pb.anonymizer import anonymizer_pb2
+from anonymizer.pii_anonymizer import PIIAnonymizer
 from anonymizer.sqlite_db import SqliteDB
 
 from sqlalchemy import text

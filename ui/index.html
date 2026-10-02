@@ -132,9 +132,10 @@ providers:{
  openai:{label:'OpenAI',enabled:false,models:['gpt-4o-mini','gpt-4o'],async chat({model,messages}){
   const r=await fetch(LLM.cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:'openai',model,messages})});
   const j=await r.json();return{content:j.choices[0].message.content}}},
- ollama:{label:'Ollama (self-hosted)',enabled:false,models:['llama3.1','mistral'],async chat({model,messages}){
-  const r=await fetch(LLM.cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:'ollama',model,messages,stream:false})});
-  const j=await r.json();return{content:j.message.content}}}}};
+ ollama:{label:'Ollama (local)',enabled:true,models:['llama3.2'],async chat({model,messages}){ // server detects + protects; raw text never reaches Ollama
+  const r=await fetch(LLM.cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-User':L.user},body:JSON.stringify({provider:'ollama',model,messages})});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||('HTTP '+r.status));
+  return{content:j.message.content,guard:j.pii_guard}}}}};
 const DET=[['Credit Card',/\b(?:\d[ -]?){13,16}\b/g,98],['SSN / Aadhaar',/\b\d{4}\s\d{4}\s\d{4}\b|\b\d{3}-\d{2}-\d{4}\b/g,95],['Email',/[\w.+-]+@[\w-]+\.[\w.]+/g,99],['IP Address',/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,97],['Phone',/\+?\d[\d\s-]{8,}\d/g,93],['Address',/\b\d{1,5}[A-Za-z]?,?\s+[A-Z]\w*(?:\s[A-Z]\w*)*\s(?:Street|St|Road|Rd|Avenue|Ave|Lane|Nagar)\b/g,86],['Name',/(?:my name is|I am|I'm|patient|customer|for|from|Mr\.|Ms\.|Dr\.)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)/g,95]];
 function detect(t){const out=[];DET.forEach(([ty,re,c])=>{for(const m of t.matchAll(re)){const v=m[1]||m[0].trim(),s=m.index+m[0].indexOf(v),e=s+v.length;if(!out.some(o=>s<o.e&&e>o.s))out.push({s,e,v,t:ty,c:Math.max(70,c-v.length%4)})}});return out.sort((a,b)=>a.s-b.s)}
 const hx=v=>{let h=5381;for(const c of v)h=(h*33^c.charCodeAt(0))>>>0;return h.toString(16).padStart(8,'0')};
@@ -145,9 +146,14 @@ function apply(h){const p=POL.find(x=>x[0]==h.t);if(!p||!p[2])return{...h,out:h.
  else o=h.t=='Name'?['Anita Verma','Rahul Menon','Sara Iyer','Daniel Costa'][parseInt(hx(h.v),16)%4]:h.t.replace(/\W+/g,'_')+'_'+hx(h.v).slice(0,4);
  return{...h,out:o,act:p[1]}}
 const seg=(t,items,f)=>{let p=0,s='';items.forEach(i=>{s+=esc(t.slice(p,i.s))+f(i);p=i.e});return s+esc(t.slice(p))};
-const L={provider:'mock',model:'mock-gpt-1',protect:1,msgs:[],sent:[],run:null,busy:0,draft:''};
+const L={provider:'ollama',model:'llama3.2',user:'user1',protect:1,msgs:[],sent:[],run:null,busy:0,draft:''};
 const SAMPLES=["Draft a reply to Priya Raman (priya.raman@acme.in, +91 98765 43210) about the failed payment on card 4532 8891 0023 7714.","Customer Daniel Costa at 42 Residency Road reported a login from 10.24.8.17. Summarise the incident."];
-async function runPipeline(text){const hits=detect(text),items=L.protect?hits.map(apply):hits.map(h=>({...h,out:h.v,act:'None'}));
+async function runPipeline(text){
+ if(L.provider=='ollama'){const res=await LLM.providers.ollama.chat({model:L.model,messages:[...L.sent,{role:'user',content:text}]}),g=res.guard;
+  L.sent.push({role:'user',content:g.protected_prompt},{role:'assistant',content:res.content});
+  const items=g.entities.map(e=>({s:e.start,e:e.end,v:e.value,t:e.entity_type,c:Math.round(e.score*100),act:e.operator_name,src:e.policy_source,out:Object.entries(e.operator_params).map(([k,v])=>k+'='+v).join(', ')||'(none)'}));
+  return{text,prot:g.protected_prompt,items,payload:g.ollama_request,response:res.content,protect:1,model:g.model_used,server:g}}
+ const hits=detect(text),items=L.protect?hits.map(apply):hits.map(h=>({...h,out:h.v,act:'None'}));
  let prot='',p=0;items.forEach(i=>{prot+=text.slice(p,i.s)+i.out;p=i.e});prot+=text.slice(p);
  const payload={provider:L.provider,model:L.model,messages:[...L.sent,{role:'user',content:prot}]}; // <- the ONLY thing sent to the LLM
  const res=await LLM.providers[L.provider].chat(payload);L.sent.push({role:'user',content:prot},{role:'assistant',content:res.content});
@@ -155,10 +161,10 @@ async function runPipeline(text){const hits=detect(text),items=L.protect?hits.ma
 async function send(){const t=L.draft.trim();if(!t||L.busy)return;L.busy=1;L.msgs.push({role:'user',text:t,p:L.protect});L.draft='';rl();
  try{const r=await runPipeline(t);L.run=r;L.msgs.push({role:'assistant',text:r.response})}catch(e){L.msgs.push({role:'assistant',text:'Error: '+e.message})}L.busy=0;rl()}
 function rl(){go();const c=$('.chat');if(c)c.scrollTop=1e9;const t=$('#pr');if(t&&!L.busy)t.focus()}
-V.llm=()=>{const r=L.run,P=LLM.providers;
+V.llm=()=>{const r=L.run,P=LLM.providers,ap=r&&r.server?[...new Map(r.items.filter(i=>i.act!='None').map(i=>[i.t,i])).values()]:[];
 const opts=Object.entries(P).map(([k,p])=>`<optgroup label="${p.label}">${p.models.map(m=>`<option value="${k}|${m}" ${p.enabled?'':'disabled'} ${L.provider==k&&L.model==m?'selected':''}>${m}${p.enabled?'':' · not connected'}</option>`).join('')}</optgroup>`).join('');
 const active=L.busy?(L.msgs.length?3:0):-1;
-const st=[['User prompt','Raw input'],['PII detection',r?r.items.length+' entities':'Regex + NER'],['Mask / anonymize',L.protect?'Policy engine':'Skipped'],['Protected prompt',L.protect?'Safe to send':'Unprotected'],['LLM',L.model],['Response','Returned']];
+const st=[['User prompt','Raw input'],['PII detection',r?r.items.length+' entities':L.provider=='ollama'?'Presidio (server)':'Regex + NER'],['Mask / anonymize',L.protect?'Policy engine':'Skipped'],['Protected prompt',L.protect?'Safe to send':'Unprotected'],['LLM',L.model],['Response','Returned']];
 return head('LLM Playground','Test how prompts are protected before they reach a model')+`
 <div class="zone"><span>Inside your environment</span><span>External LLM</span></div>
 <div class="steps">${st.map((s,i)=>`<div class="step ${r||L.busy?'done':''} ${i==4?'out':''} ${i==5?'out':''}" style="${i==5?'border-left-style:none;padding-left:14px':''}"><span class="mono mu">0${i+1}</span><b>${s[0]}</b><small>${s[1]}</small></div>`).join('')}</div>
@@ -169,15 +175,17 @@ return head('LLM Playground','Test how prompts are protected before they reach a
 <textarea id="pr" rows="3" placeholder="Type a prompt… (Enter to send, Shift+Enter for new line)" oninput="L.draft=this.value" onkeydown="if(event.key=='Enter'&&!event.shiftKey){event.preventDefault();send()}">${esc(L.draft)}</textarea>
 <div class="row" style="margin-top:10px"><span class="mu">${L.protect?'Protection on':'Protection off'}</span><button class="btn" onclick="send()" ${L.busy?'disabled':''}>Send</button></div></div>
 <div class="card"><h3>Settings</h3>
-<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Model</span><select onchange="[L.provider,L.model]=this.value.split('|');rl()">${opts}</select></div>
-<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>PII protection<div class="mu" style="font-size:12px">Apply active policies before sending</div></span><button class="sw ${L.protect?'on':''}" onclick="L.protect^=1;rl()"></button></div>
+<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Model</span><select onchange="[L.provider,L.model]=this.value.split('|');if(L.provider=='ollama')L.protect=1;rl()">${opts}</select></div>
+${L.provider=='ollama'?`<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Policy user<div class="mu" style="font-size:12px">Whose policy is applied (X-User header)</div></span><select onchange="L.user=this.value;rl()">${['user1','user2','admin'].map(u=>`<option ${L.user==u?'selected':''}>${u}</option>`).join('')}</select></div>`:''}
+<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>PII protection<div class="mu" style="font-size:12px">${L.provider=='ollama'?'Always enforced server-side for Ollama':'Apply active policies before sending'}</div></span><button class="sw ${L.protect?'on':''}" onclick="if(L.provider!='ollama')L.protect^=1;rl()"></button></div>
 <div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Endpoint</span><span class="mono mu">${LLM.cfg.endpoint}</span></div>
-<div class="mu" style="margin-top:14px;font-size:12px">Connect a real model by setting <span class="mono">enabled:true</span> and implementing <span class="mono">chat()</span> for OpenAI or Ollama in <span class="mono">LLM.providers</span>. Route through your proxy so API keys stay server-side.</div></div></div>`+(r?`
-<div class="card" style="margin-top:30px"><h3>Detected PII <span>${r.items.length} entities</span></h3>${r.items.length?`<div class="tw"><table><tr><th>Value</th><th>Type</th><th>Confidence</th><th>Policy</th><th>Protected output</th></tr>${r.items.map(i=>`<tr><td class="mono">${esc(i.v)}</td><td><b>${i.t}</b></td><td style="width:160px"><div class="row"><b>${i.c}%</b></div>${bar(i.c)}</td><td>${i.act=='None'?pill('Unprotected').replace('Unprotected',r.protect?'No policy':'Bypassed'):pill('Active').replace('Active',i.act)}</td><td class="mono">${esc(i.out)}</td></tr>`).join('')}</table></div>`:'<div class="mu">No PII detected in this prompt.</div>'}</div>
+<div class="mu" style="margin-top:14px;font-size:12px">Ollama requests go to <span class="mono">/api/llm/chat</span>: the proxy detects PII, applies the caller's policy via the anonymizer service, and forwards only the protected prompt to the local model. The mock provider stays client-side.</div></div></div>`+(r?`
+<div class="card" style="margin-top:30px"><h3>Detected PII <span>${r.items.length} entities</span></h3>${r.items.length?`<div class="tw"><table><tr><th>Value</th><th>Type</th><th>Confidence</th><th>Policy</th><th>${r.server?'Operator params':'Protected output'}</th></tr>${r.items.map(i=>`<tr><td class="mono">${esc(i.v)}</td><td><b>${i.t}</b></td><td style="width:160px"><div class="row"><b>${i.c}%</b></div>${bar(i.c)}</td><td>${i.act=='None'?pill('Unprotected').replace('Unprotected',r.protect?'No policy':'Bypassed'):pill('Active').replace('Active',i.act)}</td><td class="mono">${esc(i.out)}</td></tr>`).join('')}</table></div>`:'<div class="mu">No PII detected in this prompt.</div>'}</div>
+${r.server?`<div class="card" style="margin-top:30px"><h3>Applied policy <span>user: ${esc(r.server.policy_user)}${r.server.policy_found?'':' · no policy found → default replace'}</span></h3>${ap.length?`<div class="tw"><table><tr><th>Entity type</th><th>Operator</th><th>Parameters</th><th>Source</th></tr>${ap.map(i=>`<tr><td><b>${i.t}</b></td><td>${pill('Active').replace('Active',i.act)}</td><td class="mono">${esc(i.out)}</td><td class="mu">${esc(i.src)}</td></tr>`).join('')}</table></div>`:'<div class="mu">No PII detected, so no policy was applied.</div>'}</div>`:''}
 <div class="grid g2" style="margin-top:30px"><div class="card"><h3>Original prompt <span class="pill Critical">Stays here</span></h3><div class="pre mono">${seg(r.text,r.items,i=>`<mark>${esc(i.v)}</mark>`)}</div></div>
-<div class="card"><h3>Protected prompt <span class="pill ${r.protect?'Protected':'Critical'}">${r.protect?'Sent to LLM':'Raw sent'}</span></h3><div class="pre mono">${seg(r.text,r.items,i=>`<mark class="${i.act=='None'?'':'m'}">${esc(i.out)}</mark>`)}</div></div></div>
-<div class="grid g2" style="margin-top:30px"><div class="card"><h3>Outbound request to LLM <span class="mu">${r.model}</span></h3><div class="pre mono" style="line-height:1.6;max-height:260px;overflow:auto">${esc(JSON.stringify(r.payload,null,2))}</div></div>
-<div class="card"><h3>LLM response</h3><div class="pre" style="line-height:1.7">${esc(r.response)}</div></div></div>`:'')};
+<div class="card"><h3>Protected prompt <span class="pill ${r.protect?'Protected':'Critical'}">${r.protect?'Sent to LLM':'Raw sent'}</span></h3><div class="pre mono">${r.server?esc(r.prot):seg(r.text,r.items,i=>`<mark class="${i.act=='None'?'':'m'}">${esc(i.out)}</mark>`)}</div></div></div>
+<div class="grid g2" style="margin-top:30px"><div class="card"><h3>Outbound request to LLM <span class="mu">${r.server?esc(r.server.ollama_url)+' · ':''}${r.model}</span></h3><div class="pre mono" style="line-height:1.6;max-height:260px;overflow:auto">${esc(JSON.stringify(r.payload,null,2))}</div></div>
+<div class="card"><h3>LLM response <span class="mu">model: ${esc(r.model)}</span></h3><div class="pre" style="line-height:1.7">${esc(r.response)}</div></div></div>`:'')};
 
 function nav(p){location.hash=p}
 function go(keep){const ph=$('#q'),pos=ph?ph.selectionStart:0;$('#m').innerHTML=V[page]();$('#nav').innerHTML=PAGES.map((p,i)=>`<a class="${p[0]==page?'on':''}" onclick="nav('${p[0]}')"><span>${String(i+1).padStart(2,'0')}</span>${p[2]}</a>`).join('');if(keep){const n=$('#q');n.focus();n.setSelectionRange(pos,pos)}else $('#m').scrollTop=0}
