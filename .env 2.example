@@ -1,9 +1,0 @@
-# Local filesystem + SQLite configuration
-# Paths are relative to the project root unless absolute.
-
-SQLITE_PATH=
-STORAGE_ROOT=
-AN_SVC_URL=localhost:10666
-PII_SCORE_THRESHOLD=0.6
-SPACY_MODEL=en_core_web_sm
-DEFAULT_USER=admin
