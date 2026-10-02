@@ -85,13 +85,9 @@ class PIIAnonymizer:
             operator_params = MessageToDict(policy.operatorParams)
 
             if operator_name == "mask":
-<<<<<<< HEAD
-                operator_params["chars_to_mask"] = int(operator_params["chars_to_mask"])
-=======
                 operator_params["chars_to_mask"] = int(operator_params.get("chars_to_mask", 0))
                 if "from_end" in operator_params:
                     operator_params["from_end"] = bool(operator_params["from_end"])
->>>>>>> d7328bf (changed proj)
 
             if entity_type and operator_name:
                 if entity_type in operator_config_map:

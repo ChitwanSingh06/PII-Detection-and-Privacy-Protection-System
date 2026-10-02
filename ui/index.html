@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PII Guard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+:root{--bg:#f4f2ee;--panel:#fbfaf7;--panel2:#ebe8e1;--line:#d8d4ca;--tx:#16181d;--mu:#77756d;--ac:#1f4d3a;--ac2:#7a9a88;--ok:#2f6b4f;--wa:#a37a12;--hi:#c2561b;--cr:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101211;--panel:#161918;--panel2:#1d211f;--line:#2b302d;--tx:#ecebe6;--mu:#8b8f89;--ac:#9fd8b8;--ac2:#4f7a65;--ok:#7cc4a0;--wa:#d9b24a;--hi:#e08a55;--cr:#e57a70}}
+:root[data-theme="dark"]{--bg:#101211;--panel:#161918;--panel2:#1d211f;--line:#2b302d;--tx:#ecebe6;--mu:#8b8f89;--ac:#9fd8b8;--ac2:#4f7a65;--ok:#7cc4a0;--wa:#d9b24a;--hi:#e08a55;--cr:#e57a70}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:13.5px/1.5 Inter,system-ui,sans-serif;display:flex;-webkit-font-smoothing:antialiased}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+aside{width:212px;border-right:1px solid var(--line);padding:26px 0 20px 26px;display:flex;flex-direction:column;overflow:auto;flex:none}
+.logo{display:flex;gap:11px;align-items:center;margin-bottom:34px;font-family:Newsreader,Georgia,serif;font-size:21px;letter-spacing:-.01em}
+.logo i{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--tx);background:radial-gradient(circle,var(--ac) 0 3.5px,transparent 4px)}
+.logo small{display:block;font:500 9.5px Inter;letter-spacing:.14em;text-transform:uppercase;color:var(--mu);margin-top:1px}
+nav a{display:flex;gap:12px;padding:7px 0;color:var(--mu);cursor:pointer;border-right:2px solid transparent;margin-right:-1px}
+nav a span{font:400 10.5px "JetBrains Mono",monospace;padding-top:3px;opacity:.7}
+nav a:hover{color:var(--tx)}nav a.on{color:var(--tx);border-color:var(--ac);font-weight:600}
+main{flex:1;min-width:0;overflow:auto;padding:30px 44px 60px;max-width:1280px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:34px;padding-bottom:18px;border-bottom:1px solid var(--tx)}
+h1{font:400 34px/1.1 Newsreader,Georgia,serif;margin:0;letter-spacing:-.02em}.sub{color:var(--mu);margin-top:6px}
+.btn{background:var(--tx);color:var(--bg);border:1px solid var(--tx);border-radius:2px;padding:7px 14px;cursor:pointer;font:500 12.5px Inter,sans-serif}
+.btn.g{background:transparent;color:var(--tx);border-color:var(--line)}.btn.g:hover{border-color:var(--tx)}
+.grid{display:grid;gap:36px 40px}.g4{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:none;border:0;border-top:1px solid var(--line);padding:14px 0 0;min-width:0}
+.card h3{margin:0 0 16px;font:600 10.5px Inter;letter-spacing:.14em;text-transform:uppercase;color:var(--mu);display:flex;justify-content:space-between;align-items:center}
+.kpi{border-top-color:var(--tx)}.kpi .l{color:var(--mu);font-size:11px;letter-spacing:.1em;text-transform:uppercase}.kpi .v{font:400 44px/1.1 Newsreader,Georgia,serif;letter-spacing:-.03em;margin:8px 0 4px}.kpi .d{font-size:12px;color:var(--mu)}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:520px}
+th{text-align:left;color:var(--mu);font:500 10.5px Inter;letter-spacing:.1em;text-transform:uppercase;padding:6px 12px 10px 0;border-bottom:1px solid var(--line)}
+td{padding:12px 12px 12px 0;border-bottom:1px solid var(--line)}tr.cl{cursor:pointer}tr.cl:hover td{background:var(--panel2)}tr:last-child td{border:0}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--c,var(--tx));background:none}.pill:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--c,var(--tx))}
+.Critical{--c:var(--cr)}.High{--c:var(--hi)}.Medium{--c:var(--wa)}.Low,.Protected,.Healthy,.Active,.Completed{--c:var(--ok)}.Pending,.Scanning,.Degraded,.Partial{--c:var(--wa)}.Inactive,.Unscanned{--c:var(--mu)}.Unprotected{--c:var(--cr)}
+.bar{height:2px;background:var(--line);margin-top:6px}.bar b{display:block;height:100%;background:var(--ac)}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between}.mu{color:var(--mu)}.mono{font:400 12px "JetBrains Mono",monospace}
+input,select{background:transparent;color:var(--tx);border:0;border-bottom:1px solid var(--line);border-radius:0;padding:7px 2px;font:inherit;outline:0}input:focus,select:focus{border-color:var(--tx)}
+.chips{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:22px;border-bottom:1px solid var(--line)}.chip{padding:0 0 9px;color:var(--mu);cursor:pointer;margin-bottom:-1px;border-bottom:2px solid transparent}.chip:hover{color:var(--tx)}.chip.on{color:var(--tx);border-color:var(--ac);font-weight:600}
+.pre{background:var(--panel2);padding:18px;white-space:pre-wrap;word-break:break-word;line-height:2;border-radius:2px}
+mark{background:none;color:var(--cr);border-bottom:1.5px solid var(--cr);padding:0}mark.m{color:var(--ok);border-color:var(--ok)}
+.sw{width:30px;height:16px;border-radius:99px;background:var(--line);position:relative;cursor:pointer;border:0}.sw:after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--bg);transition:.2s}.sw.on{background:var(--ac)}.sw.on:after{left:16px}
+.flow{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap}.flow>div{flex:1;min-width:170px}.flow .ar{flex:none;min-width:0;align-self:center;color:var(--mu)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--c);display:inline-block}
+@media(max-width:800px){body{flex-direction:column}aside{width:100%;flex-direction:row;overflow-x:auto;padding:12px 16px;border-right:0;border-bottom:1px solid var(--line)}.logo{display:none}nav{display:flex;gap:16px}nav a{white-space:nowrap;border:0}main{padding:20px 18px}h1{font-size:26px}}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));border-top:1px solid var(--tx)}
+.step{padding:12px 12px 4px 0;opacity:.45}.step.on,.step.done{opacity:1}.step b{display:block;font-weight:600}.step small{color:var(--mu)}.step.out{border-left:1px dashed var(--cr);padding-left:14px}
+.zone{display:flex;gap:0;font:600 10px Inter;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);margin-bottom:6px}.zone span:first-child{flex:4}.zone span:last-child{flex:2;color:var(--cr);padding-left:14px}
+.tb{padding:12px 14px;border-left:2px solid var(--ok);background:var(--panel2);margin:18px 0 0}.tb.bad{border-color:var(--cr)}
+.chat{height:340px;overflow:auto;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0}
+.msg{margin:12px 0;max-width:92%}.msg.u{margin-left:auto;background:var(--panel2);padding:10px 14px;border-radius:2px}.msg small{display:block;color:var(--mu);font-size:11px;margin-bottom:3px}
+textarea{width:100%;background:transparent;color:var(--tx);border:1px solid var(--line);border-radius:2px;padding:12px;font:inherit;resize:none;outline:0;margin-top:12px}textarea:focus{border-color:var(--tx)}
+</style></head><body>
+<aside><div class="logo"><i></i><div>PII Guard<small>Object Storage</small></div></div><nav id="nav"></nav></aside>
+<main id="m"></main>
+<script>
+const $=s=>document.querySelector(s);
+const PAGES=[['dash','◉','Dashboard'],['store','▤','Object Storage'],['detect','⌕','PII Detection'],['obj','▣','Object Details'],['policy','⚙','Policy Engine'],['anon','⇄','Anonymization'],['ana','◔','Analytics'],['audit','☰','Audit Logs'],['health','♥','System Health'],['sec','⛨','Security Overview'],['llm','✦','LLM Playground']];
+const TYPES=[['Name',4210,96],['Email',3120,99],['Phone',2480,94],['Address',1730,88],['Credit Card',910,98],['IP Address',1260,97],['SSN / Aadhaar',640,95],['Username',820,85]];
+const COL=['#1f4d3a','#4f7a65','#8fae9c','#c9a24a','#b3261e','#5b6b7a','#a9a597','#33383a'];
+const OBJ=[
+['customers_export.csv','prod-customer-data','csv','48.2 MB','Completed',312,'Critical','Protected'],
+['support_tickets_q3.json','support-archive','json','12.7 MB','Completed',148,'High','Protected'],
+['kyc_scans_batch7.pdf','kyc-documents','pdf','230 MB','Scanning',0,'Medium','Pending'],
+['payments_ledger.parquet','finance-raw','parquet','91.4 MB','Completed',527,'Critical','Partial'],
+['web_access_logs.log','ops-logs','log','1.2 GB','Completed',89,'Medium','Protected'],
+['hr_onboarding.docx','hr-confidential','docx','3.4 MB','Completed',64,'High','Unprotected'],
+['product_catalog.json','public-assets','json','6.1 MB','Completed',0,'Low','Protected'],
+['chat_transcripts.txt','support-archive','txt','27.9 MB','Completed',203,'High','Protected'],
+['ml_training_set.csv','ai-datasets','csv','780 MB','Unscanned',0,'Medium','Pending']];
+const POL=[['Name','Pseudonymize',1],['Email','Mask',1],['Phone','Mask',1],['Address','Redact',1],['Credit Card','Redact',1],['IP Address','Hash',1],['SSN / Aadhaar','Redact',1],['Username','Hash',0]];
+const LOG=[['09:42:11','svc-ingest','Upload','customers_export.csv','OK'],['09:42:19','pii-engine','PII Detection','312 entities found','Critical'],['09:42:20','policy-engine','Policy Applied','Email → Mask','OK'],['09:41:02','a.krishnan','Download','support_tickets_q3.json','Anonymized'],['09:38:47','anonymizer','Anonymization','payments_ledger.parquet','Partial'],['09:30:15','m.fernandes','Policy Change','Username → Hash (disabled)','Warn'],['09:22:08','ml-pipeline','Download','ml_training_set.csv','Denied'],['09:12:55','svc-ingest','Upload','hr_onboarding.docx','OK'],['09:12:58','pii-engine','PII Detection','64 entities found','High']];
+const SVC=[['Object Storage (S3 / X10000)','99.99%','12 ms'],['PII Detection Engine','99.94%','184 ms'],['Policy Engine','100%','6 ms'],['Anonymization Service','99.71%','241 ms'],['PostgreSQL Database','99.98%','4 ms'],['Proxy API Gateway','99.96%','21 ms'],['Kafka Event Bus','98.90%','—']];
+let page=location.hash.slice(1)||'dash',sel=0,bk='All',q='',lf='All';
+const pill=t=>`<span class="pill ${t.split(' ')[0]}">${t}</span>`;
+const bar=(p,c)=>`<div class="bar"><b style="width:${p}%;${c?'background:'+c:''}"></b></div>`;
+const kpi=(l,v,d)=>`<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+function donut(data,cols){const t=data.reduce((a,b)=>a+b[1],0);let o=25,s='';data.forEach((d,i)=>{const p=d[1]/t*100;s+=`<circle r="15.9" cx="21" cy="21" fill="none" stroke="${cols[i]}" stroke-width="4" stroke-dasharray="${p} ${100-p}" stroke-dashoffset="${o}"/>`;o-=p});
+return `<div class="row" style="gap:18px;flex-wrap:wrap"><svg viewBox="0 0 42 42" width="150">${s}</svg><div style="flex:1;min-width:140px">${data.map((d,i)=>`<div class="row" style="margin:5px 0"><span><span class="dot" style="--c:${cols[i]}"></span> ${d[0]}</span><b>${d[1].toLocaleString()}</b></div>`).join('')}</div></div>`}
+function line(a,b,c){const w=420,h=150,mx=Math.max(...a,...(b||[]))*1.1;const pt=v=>v.map((y,i)=>`${i*w/(v.length-1)},${h-y/mx*h}`).join(' ');
+return `<svg viewBox="0 0 ${w} ${h+4}" width="100%" preserveAspectRatio="none" style="height:170px"><polyline points="0,${h} ${pt(a)} ${w},${h}" fill="${c||'var(--ac)'}" opacity=".08"/><polyline points="${pt(a)}" fill="none" stroke="${c||'var(--ac)'}" stroke-width="1.5"/>${b?`<polyline points="${pt(b)}" fill="none" stroke="var(--cr)" stroke-width="1.5"/>`:''}</svg>`}
+function hbars(rows){return rows.map(r=>`<div style="margin:11px 0"><div class="row"><span>${r[0]}</span><b>${r[1]}${r[2]||''}</b></div>${bar(r[3]??r[1])}</div>`).join('')}
+const head=(t,s,x='')=>`<div class="top"><div><h1>${t}</h1><div class="sub">${s}</div></div><div class="row">${x}<button class="btn g" onclick="tg()">Theme</button></div></div>`;
+function tg(){const r=document.documentElement,d=getComputedStyle(r).getPropertyValue('--bg').trim()=='#101211';r.dataset.theme=d?'light':'dark'}
+function logTbl(rows){return `<div class="tw"><table><tr><th>Time</th><th>User</th><th>Event</th><th>Detail</th><th>Result</th></tr>${rows.map(r=>`<tr><td class="mono mu">${r[0]}</td><td>${r[1]}</td><td><b>${r[2]}</b></td><td>${r[3]}</td><td>${pill(r[4]=='OK'?'Completed':r[4]=='Denied'||r[4]=='Warn'?'Unprotected':r[4]=='Critical'||r[4]=='High'?r[4]:r[4]=='Partial'?'Partial':'Protected').replace(/>[^<]+</,'>'+r[4]+'<')}</td></tr>`).join('')}</table></div>`}
+const V={
+dash(){return head('Dashboard','Real-time privacy posture across all buckets',`<button class="btn">Run full scan</button>`)+`
+<div class="grid g4">${kpi('Total objects','184,203','+2.1k today')}${kpi('Objects scanned','171,880','93.3% coverage')}${kpi('PII detected','15,170','across 38,412 entities')}${kpi('Protected objects','162,944','95.1% of flagged')}</div>
+<div class="grid g2" style="margin-top:16px"><div class="card"><h3>Risk levels</h3>${donut([['Critical',412],['High',1860],['Medium',5230],['Low',7668]],['#b3261e','#c2561b','#c9a24a','#4f7a65'])}</div>
+<div class="card"><h3>Protection status</h3>${hbars([['Protected',95,'%'],['Partially protected',3,'%'],['Unprotected',2,'%']]).replace(/width:3%/,'width:3%;background:var(--wa)').replace(/width:2%/,'width:2%;background:var(--cr)')}<div class="mu" style="font-size:12px">Policies enforced inline on S3 PUT / GET</div></div></div>
+<div class="grid g2" style="margin-top:16px"><div class="card"><h3>Detections · last 14 days</h3>${line([30,42,38,55,48,62,58,71,66,80,74,92,85,98])}</div>
+<div class="card"><h3>Recent activity</h3>${logTbl(LOG.slice(0,5)).replace('min-width:560px','')}</div></div>`},
+store(){const bs=['All',...new Set(OBJ.map(o=>o[1]))];const rows=OBJ.map((o,i)=>[o,i]).filter(([o])=>(bk=='All'||o[1]==bk)&&o[0].includes(q));
+return head('Object Storage','Buckets and objects with live scan status',`<button class="btn" onclick="alert('Upload goes through the S3 proxy; scanning starts on PUT event.')">Upload</button>`)+`
+<div class="chips">${bs.map(b=>`<span class="chip ${b==bk?'on':''}" onclick="bk='${b}';go()">${b}</span>`).join('')}</div>
+<div class="card"><div class="row" style="margin-bottom:12px"><input id="q" placeholder="Search objects…" value="${q}" style="width:280px;max-width:100%" oninput="q=this.value;go(1)"><span class="mu">${rows.length} objects</span></div>
+<div class="tw"><table><tr><th>Name</th><th>Bucket</th><th>Size</th><th>Scan</th><th>PII</th><th>Risk</th><th>Protection</th></tr>${rows.map(([o,i])=>`<tr class="cl" onclick="sel=${i};nav('obj')"><td><b>${o[0]}</b></td><td class="mu">${o[1]}</td><td>${o[3]}</td><td>${pill(o[4])}</td><td>${o[5]}</td><td>${pill(o[6])}</td><td>${pill(o[7])}</td></tr>`).join('')}</table></div></div>`},
+detect(){return head('PII Detection','Entity types, confidence and latest results')+`
+<div class="grid g4">${TYPES.map((t,i)=>`<div class="card"><div class="row"><b>${t[0]}</b><span class="dot" style="--c:${COL[i]};box-shadow:none"></span></div><div class="v" style="font-size:24px;font-weight:700;margin:6px 0">${t[1].toLocaleString()}</div><div class="row mu" style="font-size:12px"><span>Avg confidence</span><b style="color:var(--tx)">${t[2]}%</b></div>${bar(t[2],COL[i])}</div>`).join('')}</div>
+<div class="card" style="margin-top:16px"><h3>Latest detection results</h3><div class="tw"><table><tr><th>Object</th><th>Entity</th><th>Value (masked view)</th><th>Confidence</th><th>Detector</th></tr>
+${[['customers_export.csv','Email','pr•••••@acme.in',99],['customers_export.csv','Credit Card','4532 •••• •••• 7714',98],['support_tickets_q3.json','Phone','+91 98••• ••210',94],['hr_onboarding.docx','Address','12, MG Road, Be•••••',87],['web_access_logs.log','IP Address','10.24.•.••',97],['chat_transcripts.txt','Name','Pr••• Ra•••',96]].map(r=>`<tr><td>${r[0]}</td><td><b>${r[1]}</b></td><td class="mono">${r[2]}</td><td style="width:170px"><div class="row">${bar(r[3])}<b>${r[3]}%</b></div></td><td class="mu">${r[1]=='Name'||r[1]=='Address'?'NER model':'Regex + checksum'}</td></tr>`).join('')}</table></div></div>`},
+obj(){const o=OBJ[sel];const sp=[['Priya Raman','Name','Pseudonymize','Anita Verma'],['priya.raman@acme.in','Email','Mask','p•••••••••@acme.in'],['+91 98765 43210','Phone','Mask','+91 •••••• ••210'],['4532 8891 0023 7714','Credit Card','Redact','[REDACTED]'],['10.24.8.17','IP Address','Hash','a91f3c7e']];
+const T=[['Customer: ',0],[sp[0]],['\nEmail: '],[sp[1]],['\nPhone: '],[sp[2]],['\nCard: '],[sp[3]],['\nLast login from: '],[sp[4]]];
+const orig=T.map(t=>t[1]==undefined&&t.length==4?`<mark>${t[0]}</mark>`:t[0].length>4&&typeof t[0]=='string'&&t.length==1?t[0]:t[0]).join('');
+const render=m=>T.map(t=>t.length==4?`<mark class="${m?'m':''}">${m?t[3]:t[0]}</mark>`:t[0]).join('');
+return head(o[0],`${o[1]} · ${o[3]} · ${o[2].toUpperCase()}`,pill(o[7]))+`
+<div class="chips">${OBJ.map((x,i)=>`<span class="chip ${i==sel?'on':''}" onclick="sel=${i};go()">${x[0]}</span>`).join('')}</div>
+<div class="grid g3"><div class="card"><h3>Metadata</h3>${[['Bucket',o[1]],['Size',o[3]],['Type',o[2]],['Last scanned','Today 09:42'],['ETag','9b2f…e41a'],['Scan status',o[4]],['Risk',o[6]],['PII entities',o[5]]].map(r=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="mu">${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>
+<div class="card" style="grid-column:span 2"><h3>Detected PII</h3><div class="tw"><table><tr><th>Value</th><th>Type</th><th>Policy</th></tr>${sp.map(s=>`<tr><td class="mono">${s[0]}</td><td>${s[1]}</td><td>${pill('Active').replace('Active',s[2])}</td></tr>`).join('')}</table></div></div></div>
+<div class="grid g2" style="margin-top:16px"><div class="card"><h3>Original content <span class="pill Critical">Restricted</span></h3><div class="pre mono">${render(0)}</div></div><div class="card"><h3>Anonymized preview <span class="pill Protected">Served on GET</span></h3><div class="pre mono">${render(1)}</div></div></div>`},
+policy(){return head('Policy Engine','Map PII types to actions — enforced inline on GET',`<button class="btn">+ New policy</button>`)+`<div class="card"><div class="tw"><table><tr><th>PII type</th><th>Action</th><th>Scope</th><th>Status</th><th>Enabled</th></tr>${POL.map((p,i)=>`<tr><td><b>${p[0]}</b></td><td><select onchange="POL[${i}][1]=this.value">${['Mask','Redact','Hash','Pseudonymize'].map(a=>`<option ${a==p[1]?'selected':''}>${a}</option>`).join('')}</select></td><td class="mu">All buckets</td><td>${pill(p[2]?'Active':'Inactive')}</td><td><button class="sw ${p[2]?'on':''}" onclick="POL[${i}][2]^=1;go()"></button></td></tr>`).join('')}</table></div></div>
+<div class="grid g4" style="margin-top:16px">${[['Mask','Partially hide characters, keep format'],['Redact','Remove entirely, replace with tag'],['Hash','Deterministic one-way token'],['Pseudonymize','Realistic consistent substitute']].map(a=>`<div class="card"><b>${a[0]}</b><div class="mu" style="margin-top:4px">${a[1]}</div></div>`).join('')}</div>`},
+anon(){const s=[['Priya Raman','Name','Pseudonymize','Anita Verma'],['priya.raman@acme.in','Email','Mask','p•••••••••@acme.in'],['4532 8891 0023 7714','Credit Card','Redact','[REDACTED]'],['10.24.8.17','IP Address','Hash','a91f3c7e']];
+return head('Anonymization','Original → detected PII → policy → protected output')+s.map(r=>`<div class="card" style="margin-bottom:12px"><div class="flow"><div><div class="mu" style="font-size:11px">ORIGINAL</div><div class="mono"><mark>${r[0]}</mark></div></div><span class="ar">→</span><div><div class="mu" style="font-size:11px">DETECTED</div>${pill('High').replace('High',r[1])}</div><span class="ar">→</span><div><div class="mu" style="font-size:11px">POLICY</div>${pill('Active').replace('Active',r[2])}</div><span class="ar">→</span><div><div class="mu" style="font-size:11px">PROTECTED OUTPUT</div><div class="mono"><mark class="m">${r[3]}</mark></div></div></div></div>`).join('')+`<div class="grid g3"><div class="card kpi"><div class="l">Avg latency / GET</div><div class="v">241 ms</div><div class="d">~45 entities per object</div></div>${kpi('Anonymized today','8,412','+12%')}${kpi('Failures','3','0.04%')}</div>`},
+ana(){return head('Analytics','Trends, distribution and coverage')+`<div class="grid g2"><div class="card"><h3>PII distribution</h3>${donut(TYPES.map(t=>[t[0],t[1]]),COL)}</div>
+<div class="card"><h3>Detection vs protection · 14 days</h3>${line([30,42,38,55,48,62,58,71,66,80,74,92,85,98],[26,38,36,52,47,60,57,70,65,79,74,90,84,97])}<div class="row mu" style="font-size:12px"><span>● Detected</span><span style="color:var(--cr)">● Protected</span></div></div>
+<div class="card"><h3>Risk distribution</h3>${hbars([['Critical',412,'',3],['High',1860,'',12],['Medium',5230,'',34],['Low',7668,'',51]])}</div>
+<div class="card"><h3>Protection coverage by bucket</h3>${hbars([['prod-customer-data',100,'%'],['support-archive',97,'%'],['finance-raw',82,'%'],['hr-confidential',61,'%'],['ai-datasets',44,'%']])}</div>
+<div class="card"><h3>Anonymization by action</h3>${donut([['Mask',9800],['Redact',6400],['Hash',3100],['Pseudonymize',5200]],['#1f4d3a','#b3261e','#8fae9c','#c9a24a'])}</div></div>`},
+audit(){const f=['All','Upload','Download','PII Detection','Policy Applied','Anonymization'];const r=LOG.filter(l=>lf=='All'||l[2]==lf);
+return head('Audit Logs','Immutable record of every storage and privacy event',`<button class="btn g">Export CSV</button>`)+`<div class="chips">${f.map(x=>`<span class="chip ${x==lf?'on':''}" onclick="lf='${x}';go()">${x}</span>`).join('')}</div><div class="card">${logTbl(r)}</div>`},
+health(){return head('System Health','Service availability and latency')+`<div class="grid g3">${SVC.map((s,i)=>{const d=i==6;return `<div class="card"><div class="row"><b>${s[0]}</b>${pill(d?'Degraded':'Healthy')}</div><div class="row" style="margin-top:14px"><div><div class="mu" style="font-size:11px">UPTIME</div><b style="font-size:20px">${s[1]}</b></div><div style="text-align:right"><div class="mu" style="font-size:11px">LATENCY</div><b style="font-size:20px">${s[2]}</b></div></div>${bar(parseFloat(s[1]),d?'var(--wa)':'var(--ok)')}</div>`}).join('')}</div>`},
+sec(){return head('Security Overview','Overall protection posture')+`<div class="card" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap"><div style="font:400 72px Newsreader,Georgia,serif;color:var(--ok)">92<span style="font-size:20px" class="mu">/100</span></div><div style="flex:1;min-width:220px"><b>Protection status: Good</b><div class="mu">2 critical findings and 1 unprotected high-risk object need attention.</div></div>${pill('Protected').replace('Protected','Enforcing')}</div>
+<div class="grid g2" style="margin-top:16px"><div class="card"><h3>Critical findings</h3>${[['Unencrypted card numbers in finance-raw','Critical'],['Username policy disabled','High'],['ml_training_set.csv not yet scanned','Medium']].map(f=>`<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>${f[0]}</span>${pill(f[1])}</div>`).join('')}</div>
+<div class="card"><h3>High-risk objects</h3>${OBJ.filter(o=>o[6]=='Critical'||o[6]=='High').map(o=>`<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span><b>${o[0]}</b> <span class="mu">${o[1]}</span></span>${pill(o[7])}</div>`).join('')}</div></div>
+<div class="card" style="margin-top:16px"><h3>Recent security events</h3>${logTbl(LOG.filter(l=>['Denied','Warn','Critical','Partial'].includes(l[4])))}</div>`}};
+/* ---------- LLM Playground: swap `enabled:true` + implement chat() to connect a real LLM ---------- */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms)),esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const LLM={cfg:{endpoint:'/api/llm/chat'}, // recommended: your proxy-server forwards to the provider so API keys stay server-side
+providers:{
+ mock:{label:'Mock LLM (local)',enabled:true,models:['mock-gpt-1','mock-llama-lite'],async chat({model,messages}){await sleep(800);
+  const last=messages[messages.length-1].content,toks=(last.match(/\[[A-Z_]+\]|<h:[0-9a-f]+>|[A-Za-z]+ [A-Za-z]+(?= |,|\.)/g)||[]).slice(0,2).join(', ');
+  return{content:`Thanks for the context. Working only from the details in your (protected) prompt, I'd suggest: verify the account holder through your standard identity check, then update the record using the reference values provided${toks?' ('+toks+')':''}. I can also draft a customer-facing message if that helps.`}}},
+ openai:{label:'OpenAI',enabled:false,models:['gpt-4o-mini','gpt-4o'],async chat({model,messages}){
+  const r=await fetch(LLM.cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:'openai',model,messages})});
+  const j=await r.json();return{content:j.choices[0].message.content}}},
+ ollama:{label:'Ollama (self-hosted)',enabled:false,models:['llama3.1','mistral'],async chat({model,messages}){
+  const r=await fetch(LLM.cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:'ollama',model,messages,stream:false})});
+  const j=await r.json();return{content:j.message.content}}}}};
+const DET=[['Credit Card',/\b(?:\d[ -]?){13,16}\b/g,98],['SSN / Aadhaar',/\b\d{4}\s\d{4}\s\d{4}\b|\b\d{3}-\d{2}-\d{4}\b/g,95],['Email',/[\w.+-]+@[\w-]+\.[\w.]+/g,99],['IP Address',/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,97],['Phone',/\+?\d[\d\s-]{8,}\d/g,93],['Address',/\b\d{1,5}[A-Za-z]?,?\s+[A-Z]\w*(?:\s[A-Z]\w*)*\s(?:Street|St|Road|Rd|Avenue|Ave|Lane|Nagar)\b/g,86],['Name',/(?:my name is|I am|I'm|patient|customer|for|from|Mr\.|Ms\.|Dr\.)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)/g,95]];
+function detect(t){const out=[];DET.forEach(([ty,re,c])=>{for(const m of t.matchAll(re)){const v=m[1]||m[0].trim(),s=m.index+m[0].indexOf(v),e=s+v.length;if(!out.some(o=>s<o.e&&e>o.s))out.push({s,e,v,t:ty,c:Math.max(70,c-v.length%4)})}});return out.sort((a,b)=>a.s-b.s)}
+const hx=v=>{let h=5381;for(const c of v)h=(h*33^c.charCodeAt(0))>>>0;return h.toString(16).padStart(8,'0')};
+function apply(h){const p=POL.find(x=>x[0]==h.t);if(!p||!p[2])return{...h,out:h.v,act:'None'};let o;
+ if(p[1]=='Mask'){const k=h.t=='Email'?h.v.split('@')[1].length+1:3,n=h.v.length-k;o=h.v.slice(0,n).replace(/[A-Za-z0-9]/g,'•')+h.v.slice(n)}
+ else if(p[1]=='Redact')o='['+h.t.toUpperCase().replace(/\W+/g,'_')+']';
+ else if(p[1]=='Hash')o='<h:'+hx(h.v)+'>';
+ else o=h.t=='Name'?['Anita Verma','Rahul Menon','Sara Iyer','Daniel Costa'][parseInt(hx(h.v),16)%4]:h.t.replace(/\W+/g,'_')+'_'+hx(h.v).slice(0,4);
+ return{...h,out:o,act:p[1]}}
+const seg=(t,items,f)=>{let p=0,s='';items.forEach(i=>{s+=esc(t.slice(p,i.s))+f(i);p=i.e});return s+esc(t.slice(p))};
+const L={provider:'mock',model:'mock-gpt-1',protect:1,msgs:[],sent:[],run:null,busy:0,draft:''};
+const SAMPLES=["Draft a reply to Priya Raman (priya.raman@acme.in, +91 98765 43210) about the failed payment on card 4532 8891 0023 7714.","Customer Daniel Costa at 42 Residency Road reported a login from 10.24.8.17. Summarise the incident."];
+async function runPipeline(text){const hits=detect(text),items=L.protect?hits.map(apply):hits.map(h=>({...h,out:h.v,act:'None'}));
+ let prot='',p=0;items.forEach(i=>{prot+=text.slice(p,i.s)+i.out;p=i.e});prot+=text.slice(p);
+ const payload={provider:L.provider,model:L.model,messages:[...L.sent,{role:'user',content:prot}]}; // <- the ONLY thing sent to the LLM
+ const res=await LLM.providers[L.provider].chat(payload);L.sent.push({role:'user',content:prot},{role:'assistant',content:res.content});
+ return{text,prot,items,payload,response:res.content,protect:L.protect,model:L.model}}
+async function send(){const t=L.draft.trim();if(!t||L.busy)return;L.busy=1;L.msgs.push({role:'user',text:t,p:L.protect});L.draft='';rl();
+ try{const r=await runPipeline(t);L.run=r;L.msgs.push({role:'assistant',text:r.response})}catch(e){L.msgs.push({role:'assistant',text:'Error: '+e.message})}L.busy=0;rl()}
+function rl(){go();const c=$('.chat');if(c)c.scrollTop=1e9;const t=$('#pr');if(t&&!L.busy)t.focus()}
+V.llm=()=>{const r=L.run,P=LLM.providers;
+const opts=Object.entries(P).map(([k,p])=>`<optgroup label="${p.label}">${p.models.map(m=>`<option value="${k}|${m}" ${p.enabled?'':'disabled'} ${L.provider==k&&L.model==m?'selected':''}>${m}${p.enabled?'':' · not connected'}</option>`).join('')}</optgroup>`).join('');
+const active=L.busy?(L.msgs.length?3:0):-1;
+const st=[['User prompt','Raw input'],['PII detection',r?r.items.length+' entities':'Regex + NER'],['Mask / anonymize',L.protect?'Policy engine':'Skipped'],['Protected prompt',L.protect?'Safe to send':'Unprotected'],['LLM',L.model],['Response','Returned']];
+return head('LLM Playground','Test how prompts are protected before they reach a model')+`
+<div class="zone"><span>Inside your environment</span><span>External LLM</span></div>
+<div class="steps">${st.map((s,i)=>`<div class="step ${r||L.busy?'done':''} ${i==4?'out':''} ${i==5?'out':''}" style="${i==5?'border-left-style:none;padding-left:14px':''}"><span class="mono mu">0${i+1}</span><b>${s[0]}</b><small>${s[1]}</small></div>`).join('')}</div>
+<div class="tb ${L.protect?'':'bad'}"><b>${L.protect?'Only the protected prompt is sent to the LLM.':'Protection is OFF — the raw prompt will be sent to the LLM.'}</b> <span class="mu">${L.protect?'Original text never leaves your environment.':'Turn protection on to enforce your active policies.'}</span></div>
+<div class="grid g2" style="margin-top:30px"><div class="card"><h3>Chat</h3>
+<div class="chat">${L.msgs.length?L.msgs.map(m=>`<div class="msg ${m.role=='user'?'u':''}"><small>${m.role=='user'?'You'+(m.p?' · protected before sending':' · sent raw'):L.model}</small>${esc(m.text)}</div>`).join(''):`<div class="mu" style="padding:20px 0">Enter a prompt containing personal data, or try a sample:</div>`}${L.busy?'<div class="msg mu">Processing…</div>':''}</div>
+<div class="chips" style="margin:12px 0 0;border:0;gap:14px">${SAMPLES.map((s,i)=>`<span class="chip" style="border:0;padding:0;text-decoration:underline" onclick="L.draft=SAMPLES[${i}];rl()">Sample ${i+1}</span>`).join('')}<span class="chip" style="border:0;padding:0" onclick="L.msgs=[];L.sent=[];L.run=null;rl()">Clear</span></div>
+<textarea id="pr" rows="3" placeholder="Type a prompt… (Enter to send, Shift+Enter for new line)" oninput="L.draft=this.value" onkeydown="if(event.key=='Enter'&&!event.shiftKey){event.preventDefault();send()}">${esc(L.draft)}</textarea>
+<div class="row" style="margin-top:10px"><span class="mu">${L.protect?'Protection on':'Protection off'}</span><button class="btn" onclick="send()" ${L.busy?'disabled':''}>Send</button></div></div>
+<div class="card"><h3>Settings</h3>
+<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Model</span><select onchange="[L.provider,L.model]=this.value.split('|');rl()">${opts}</select></div>
+<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>PII protection<div class="mu" style="font-size:12px">Apply active policies before sending</div></span><button class="sw ${L.protect?'on':''}" onclick="L.protect^=1;rl()"></button></div>
+<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Endpoint</span><span class="mono mu">${LLM.cfg.endpoint}</span></div>
+<div class="mu" style="margin-top:14px;font-size:12px">Connect a real model by setting <span class="mono">enabled:true</span> and implementing <span class="mono">chat()</span> for OpenAI or Ollama in <span class="mono">LLM.providers</span>. Route through your proxy so API keys stay server-side.</div></div></div>`+(r?`
+<div class="card" style="margin-top:30px"><h3>Detected PII <span>${r.items.length} entities</span></h3>${r.items.length?`<div class="tw"><table><tr><th>Value</th><th>Type</th><th>Confidence</th><th>Policy</th><th>Protected output</th></tr>${r.items.map(i=>`<tr><td class="mono">${esc(i.v)}</td><td><b>${i.t}</b></td><td style="width:160px"><div class="row"><b>${i.c}%</b></div>${bar(i.c)}</td><td>${i.act=='None'?pill('Unprotected').replace('Unprotected',r.protect?'No policy':'Bypassed'):pill('Active').replace('Active',i.act)}</td><td class="mono">${esc(i.out)}</td></tr>`).join('')}</table></div>`:'<div class="mu">No PII detected in this prompt.</div>'}</div>
+<div class="grid g2" style="margin-top:30px"><div class="card"><h3>Original prompt <span class="pill Critical">Stays here</span></h3><div class="pre mono">${seg(r.text,r.items,i=>`<mark>${esc(i.v)}</mark>`)}</div></div>
+<div class="card"><h3>Protected prompt <span class="pill ${r.protect?'Protected':'Critical'}">${r.protect?'Sent to LLM':'Raw sent'}</span></h3><div class="pre mono">${seg(r.text,r.items,i=>`<mark class="${i.act=='None'?'':'m'}">${esc(i.out)}</mark>`)}</div></div></div>
+<div class="grid g2" style="margin-top:30px"><div class="card"><h3>Outbound request to LLM <span class="mu">${r.model}</span></h3><div class="pre mono" style="line-height:1.6;max-height:260px;overflow:auto">${esc(JSON.stringify(r.payload,null,2))}</div></div>
+<div class="card"><h3>LLM response</h3><div class="pre" style="line-height:1.7">${esc(r.response)}</div></div></div>`:'')};
+
+function nav(p){location.hash=p}
+function go(keep){const ph=$('#q'),pos=ph?ph.selectionStart:0;$('#m').innerHTML=V[page]();$('#nav').innerHTML=PAGES.map((p,i)=>`<a class="${p[0]==page?'on':''}" onclick="nav('${p[0]}')"><span>${String(i+1).padStart(2,'0')}</span>${p[2]}</a>`).join('');if(keep){const n=$('#q');n.focus();n.setSelectionRange(pos,pos)}else $('#m').scrollTop=0}
+addEventListener('hashchange',()=>{page=location.hash.slice(1)||'dash';if(!V[page])page='dash';go()});
+if(!V[page])page='dash';go();
+</script></body></html>

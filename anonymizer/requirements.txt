@@ -1,16 +1,6 @@
-<<<<<<< HEAD
-presidio_analyzer
-presidio_anonymizer
-sqlalchemy
-psycopg2-binary
-grpcio
-grpcio-reflection
-grpcio-tools
-=======
 presidio-analyzer
 presidio-anonymizer
 sqlalchemy
 grpcio
 grpcio-reflection
 grpcio-tools
->>>>>>> d7328bf (changed proj)

@@ -2,11 +2,7 @@ import logging
 
 from anonymizer.server.server import GrpcServer
 from anonymizer.pii_anonymizer import PIIAnonymizer
-<<<<<<< HEAD
-from anonymizer.postgres_db import PostgresDB
-=======
 from anonymizer.sqlite_db import SqliteDB
->>>>>>> d7328bf (changed proj)
 
 logging.basicConfig(
     level=logging.DEBUG,  # Show all logs DEBUG and above
@@ -19,12 +15,7 @@ if __name__ == "__main__":
     # initialize the anonymizer engine
     PIIAnonymizer.get_anonymizer_engine()
 
-<<<<<<< HEAD
-    # initialize the PostgresDB engine
-    PostgresDB.get_db_engine()
-=======
     SqliteDB.get_db_engine()
->>>>>>> d7328bf (changed proj)
 
     # start the grpc server
     server = GrpcServer().start_server()

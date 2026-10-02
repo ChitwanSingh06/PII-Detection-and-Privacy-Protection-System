@@ -1,7 +1,1 @@
-<<<<<<< HEAD
-redis
 python-dotenv
-confluent-kafka
-=======
-python-dotenv
->>>>>>> d7328bf (changed proj)
