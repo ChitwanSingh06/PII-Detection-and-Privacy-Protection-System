@@ -8,6 +8,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import SQLITE_PATH  # noqa: E402
+from security import hash_password  # noqa: E402
 
 USER1_POLICY = [
     {
@@ -70,6 +71,23 @@ USER2_POLICY = [
     },
 ]
 
+# Demo accounts for local testing ONLY. Change or remove them before any real use.
+# (user_name, role, policy_name, password). Admin has no policy, so GETs return the original file.
+DEMO_USERS = [
+    ("admin", "admin", "", "Admin@12345"),
+    ("user1", "user", "user1_policy", "User1@12345"),
+    ("user2", "user", "user2_policy", "User2@12345"),
+]
+
+
+def ensure_auth_columns(cur):
+    """Add the auth columns to a users table created before authentication existed."""
+    existing = {row[1] for row in cur.execute("PRAGMA table_info(users)")}
+    if "password_hash" not in existing:
+        cur.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+    if "role" not in existing:
+        cur.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+
 
 def create_tables():
     db_path = Path(SQLITE_PATH)
@@ -94,10 +112,13 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS users (
             user_name TEXT NOT NULL,
             policy_name TEXT NOT NULL,
+            password_hash TEXT,
+            role TEXT NOT NULL DEFAULT 'user',
             PRIMARY KEY (user_name, policy_name)
         );
         """
     )
+    ensure_auth_columns(cur)  # migrates databases created before authentication was added
 
     cur.execute(
         """
@@ -111,14 +132,11 @@ def create_tables():
     cur.execute("DELETE FROM users")
     cur.execute("DELETE FROM policies")
 
-    cur.execute(
-        "INSERT INTO users (user_name, policy_name) VALUES (?, ?)",
-        ("user1", "user1_policy"),
-    )
-    cur.execute(
-        "INSERT INTO users (user_name, policy_name) VALUES (?, ?)",
-        ("user2", "user2_policy"),
-    )
+    for user_name, role, policy_name, password in DEMO_USERS:
+        cur.execute(
+            "INSERT INTO users (user_name, policy_name, password_hash, role) VALUES (?, ?, ?, ?)",
+            (user_name, policy_name, hash_password(password), role),
+        )
 
     for rule in USER1_POLICY:
         cur.execute(
@@ -134,7 +152,7 @@ def create_tables():
     conn.commit()
     cur.close()
     conn.close()
-    print(f"SQLite tables created and sample policies seeded at {db_path}")
+    print(f"SQLite tables created; demo users (admin, user1, user2) and sample policies seeded at {db_path}")
 
 
 if __name__ == "__main__":

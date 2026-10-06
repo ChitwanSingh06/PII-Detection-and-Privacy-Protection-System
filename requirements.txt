@@ -10,3 +10,4 @@ presidio-analyzer
 presidio-anonymizer
 python-dotenv
 spacy
+PyJWT>=2.8,<3

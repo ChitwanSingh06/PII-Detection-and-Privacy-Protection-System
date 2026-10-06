@@ -48,7 +48,15 @@ mark{background:none;color:var(--cr);border-bottom:1.5px solid var(--cr);padding
 .chat{height:340px;overflow:auto;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0}
 .msg{margin:12px 0;max-width:92%}.msg.u{margin-left:auto;background:var(--panel2);padding:10px 14px;border-radius:2px}.msg small{display:block;color:var(--mu);font-size:11px;margin-bottom:3px}
 textarea{width:100%;background:transparent;color:var(--tx);border:1px solid var(--line);border-radius:2px;padding:12px;font:inherit;resize:none;outline:0;margin-top:12px}textarea:focus{border-color:var(--tx)}
+#login{position:fixed;inset:0;z-index:10;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}#login[hidden]{display:none}
+#login form{width:340px;max-width:100%}#login h1{font-size:30px;margin-bottom:6px}#login .sub{margin-bottom:28px}
+#login label{display:block;font:500 10.5px Inter;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}#login input{width:100%;margin:4px 0 20px}
+#login .err{color:var(--cr);min-height:20px;margin-bottom:10px}#login .btn{width:100%;padding:10px 14px}#login .btn:disabled{opacity:.6;cursor:default}
 </style></head><body>
+<div id="login" hidden><form onsubmit="doLogin(event)" autocomplete="on"><h1>PII Guard</h1><div class="sub">Sign in to continue. Demo accounts are listed in the README.</div>
+<label for="lu">Username</label><input id="lu" name="username" autocomplete="username" required maxlength="64">
+<label for="lp">Password</label><input id="lp" name="password" type="password" autocomplete="current-password" required maxlength="128">
+<div class="err" id="lerr" role="alert"></div><button class="btn" id="lb" type="submit">Sign in</button></form></div>
 <aside><div class="logo"><i></i><div>PII Guard<small>Object Storage</small></div></div><nav id="nav"></nav></aside>
 <main id="m"></main>
 <script>
@@ -66,7 +74,6 @@ const OBJ=[
 ['product_catalog.json','public-assets','json','6.1 MB','Completed',0,'Low','Protected'],
 ['chat_transcripts.txt','support-archive','txt','27.9 MB','Completed',203,'High','Protected'],
 ['ml_training_set.csv','ai-datasets','csv','780 MB','Unscanned',0,'Medium','Pending']];
-const POL=[['Name','Pseudonymize',1],['Email','Mask',1],['Phone','Mask',1],['Address','Redact',1],['Credit Card','Redact',1],['IP Address','Hash',1],['SSN / Aadhaar','Redact',1],['Username','Hash',0]];
 const LOG=[['09:42:11','svc-ingest','Upload','customers_export.csv','OK'],['09:42:19','pii-engine','PII Detection','312 entities found','Critical'],['09:42:20','policy-engine','Policy Applied','Email → Mask','OK'],['09:41:02','a.krishnan','Download','support_tickets_q3.json','Anonymized'],['09:38:47','anonymizer','Anonymization','payments_ledger.parquet','Partial'],['09:30:15','m.fernandes','Policy Change','Username → Hash (disabled)','Warn'],['09:22:08','ml-pipeline','Download','ml_training_set.csv','Denied'],['09:12:55','svc-ingest','Upload','hr_onboarding.docx','OK'],['09:12:58','pii-engine','PII Detection','64 entities found','High']];
 const SVC=[['Object Storage (S3 / X10000)','99.99%','12 ms'],['PII Detection Engine','99.94%','184 ms'],['Policy Engine','100%','6 ms'],['Anonymization Service','99.71%','241 ms'],['PostgreSQL Database','99.98%','4 ms'],['Proxy API Gateway','99.96%','21 ms'],['Kafka Event Bus','98.90%','—']];
 let page=location.hash.slice(1)||'dash',sel=0,bk='All',q='',lf='All';
@@ -78,7 +85,7 @@ return `<div class="row" style="gap:18px;flex-wrap:wrap"><svg viewBox="0 0 42 42
 function line(a,b,c){const w=420,h=150,mx=Math.max(...a,...(b||[]))*1.1;const pt=v=>v.map((y,i)=>`${i*w/(v.length-1)},${h-y/mx*h}`).join(' ');
 return `<svg viewBox="0 0 ${w} ${h+4}" width="100%" preserveAspectRatio="none" style="height:170px"><polyline points="0,${h} ${pt(a)} ${w},${h}" fill="${c||'var(--ac)'}" opacity=".08"/><polyline points="${pt(a)}" fill="none" stroke="${c||'var(--ac)'}" stroke-width="1.5"/>${b?`<polyline points="${pt(b)}" fill="none" stroke="var(--cr)" stroke-width="1.5"/>`:''}</svg>`}
 function hbars(rows){return rows.map(r=>`<div style="margin:11px 0"><div class="row"><span>${r[0]}</span><b>${r[1]}${r[2]||''}</b></div>${bar(r[3]??r[1])}</div>`).join('')}
-const head=(t,s,x='')=>`<div class="top"><div><h1>${t}</h1><div class="sub">${s}</div></div><div class="row">${x}<button class="btn g" onclick="tg()">Theme</button></div></div>`;
+const head=(t,s,x='')=>`<div class="top"><div><h1>${t}</h1><div class="sub">${s}</div></div><div class="row">${x}<span class="mu">${esc(AUTH.user||'')} · ${esc(AUTH.role||'')}</span><button class="btn g" onclick="tg()">Theme</button><button class="btn g" onclick="logout()">Sign out</button></div></div>`;
 function tg(){const r=document.documentElement,d=getComputedStyle(r).getPropertyValue('--bg').trim()=='#101211';r.dataset.theme=d?'light':'dark'}
 function logTbl(rows){return `<div class="tw"><table><tr><th>Time</th><th>User</th><th>Event</th><th>Detail</th><th>Result</th></tr>${rows.map(r=>`<tr><td class="mono mu">${r[0]}</td><td>${r[1]}</td><td><b>${r[2]}</b></td><td>${r[3]}</td><td>${pill(r[4]=='OK'?'Completed':r[4]=='Denied'||r[4]=='Warn'?'Unprotected':r[4]=='Critical'||r[4]=='High'?r[4]:r[4]=='Partial'?'Partial':'Protected').replace(/>[^<]+</,'>'+r[4]+'<')}</td></tr>`).join('')}</table></div>`}
 const V={
@@ -106,8 +113,6 @@ return head(o[0],`${o[1]} · ${o[3]} · ${o[2].toUpperCase()}`,pill(o[7]))+`
 <div class="grid g3"><div class="card"><h3>Metadata</h3>${[['Bucket',o[1]],['Size',o[3]],['Type',o[2]],['Last scanned','Today 09:42'],['ETag','9b2f…e41a'],['Scan status',o[4]],['Risk',o[6]],['PII entities',o[5]]].map(r=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="mu">${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>
 <div class="card" style="grid-column:span 2"><h3>Detected PII</h3><div class="tw"><table><tr><th>Value</th><th>Type</th><th>Policy</th></tr>${sp.map(s=>`<tr><td class="mono">${s[0]}</td><td>${s[1]}</td><td>${pill('Active').replace('Active',s[2])}</td></tr>`).join('')}</table></div></div></div>
 <div class="grid g2" style="margin-top:16px"><div class="card"><h3>Original content <span class="pill Critical">Restricted</span></h3><div class="pre mono">${render(0)}</div></div><div class="card"><h3>Anonymized preview <span class="pill Protected">Served on GET</span></h3><div class="pre mono">${render(1)}</div></div></div>`},
-policy(){return head('Policy Engine','Map PII types to actions — enforced inline on GET',`<button class="btn">+ New policy</button>`)+`<div class="card"><div class="tw"><table><tr><th>PII type</th><th>Action</th><th>Scope</th><th>Status</th><th>Enabled</th></tr>${POL.map((p,i)=>`<tr><td><b>${p[0]}</b></td><td><select onchange="POL[${i}][1]=this.value">${['Mask','Redact','Hash','Pseudonymize'].map(a=>`<option ${a==p[1]?'selected':''}>${a}</option>`).join('')}</select></td><td class="mu">All buckets</td><td>${pill(p[2]?'Active':'Inactive')}</td><td><button class="sw ${p[2]?'on':''}" onclick="POL[${i}][2]^=1;go()"></button></td></tr>`).join('')}</table></div></div>
-<div class="grid g4" style="margin-top:16px">${[['Mask','Partially hide characters, keep format'],['Redact','Remove entirely, replace with tag'],['Hash','Deterministic one-way token'],['Pseudonymize','Realistic consistent substitute']].map(a=>`<div class="card"><b>${a[0]}</b><div class="mu" style="margin-top:4px">${a[1]}</div></div>`).join('')}</div>`},
 anon(){const s=[['Priya Raman','Name','Pseudonymize','Anita Verma'],['priya.raman@acme.in','Email','Mask','p•••••••••@acme.in'],['4532 8891 0023 7714','Credit Card','Redact','[REDACTED]'],['10.24.8.17','IP Address','Hash','a91f3c7e']];
 return head('Anonymization','Original → detected PII → policy → protected output')+s.map(r=>`<div class="card" style="margin-bottom:12px"><div class="flow"><div><div class="mu" style="font-size:11px">ORIGINAL</div><div class="mono"><mark>${r[0]}</mark></div></div><span class="ar">→</span><div><div class="mu" style="font-size:11px">DETECTED</div>${pill('High').replace('High',r[1])}</div><span class="ar">→</span><div><div class="mu" style="font-size:11px">POLICY</div>${pill('Active').replace('Active',r[2])}</div><span class="ar">→</span><div><div class="mu" style="font-size:11px">PROTECTED OUTPUT</div><div class="mono"><mark class="m">${r[3]}</mark></div></div></div></div>`).join('')+`<div class="grid g3"><div class="card kpi"><div class="l">Avg latency / GET</div><div class="v">241 ms</div><div class="d">~45 entities per object</div></div>${kpi('Anonymized today','8,412','+12%')}${kpi('Failures','3','0.04%')}</div>`},
 ana(){return head('Analytics','Trends, distribution and coverage')+`<div class="grid g2"><div class="card"><h3>PII distribution</h3>${donut(TYPES.map(t=>[t[0],t[1]]),COL)}</div>
@@ -122,73 +127,115 @@ sec(){return head('Security Overview','Overall protection posture')+`<div class=
 <div class="grid g2" style="margin-top:16px"><div class="card"><h3>Critical findings</h3>${[['Unencrypted card numbers in finance-raw','Critical'],['Username policy disabled','High'],['ml_training_set.csv not yet scanned','Medium']].map(f=>`<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>${f[0]}</span>${pill(f[1])}</div>`).join('')}</div>
 <div class="card"><h3>High-risk objects</h3>${OBJ.filter(o=>o[6]=='Critical'||o[6]=='High').map(o=>`<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span><b>${o[0]}</b> <span class="mu">${o[1]}</span></span>${pill(o[7])}</div>`).join('')}</div></div>
 <div class="card" style="margin-top:16px"><h3>Recent security events</h3>${logTbl(LOG.filter(l=>['Denied','Warn','Critical','Partial'].includes(l[4])))}</div>`}};
-/* ---------- LLM Playground: swap `enabled:true` + implement chat() to connect a real LLM ---------- */
+/* ---------- LLM Playground: Ollama llama3.2 via /api/llm/chat (PII is detected + protected server-side) ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms)),esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const LLM={cfg:{endpoint:'/api/llm/chat'}, // recommended: your proxy-server forwards to the provider so API keys stay server-side
 providers:{
- mock:{label:'Mock LLM (local)',enabled:true,models:['mock-gpt-1','mock-llama-lite'],async chat({model,messages}){await sleep(800);
-  const last=messages[messages.length-1].content,toks=(last.match(/\[[A-Z_]+\]|<h:[0-9a-f]+>|[A-Za-z]+ [A-Za-z]+(?= |,|\.)/g)||[]).slice(0,2).join(', ');
-  return{content:`Thanks for the context. Working only from the details in your (protected) prompt, I'd suggest: verify the account holder through your standard identity check, then update the record using the reference values provided${toks?' ('+toks+')':''}. I can also draft a customer-facing message if that helps.`}}},
- openai:{label:'OpenAI',enabled:false,models:['gpt-4o-mini','gpt-4o'],async chat({model,messages}){
-  const r=await fetch(LLM.cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:'openai',model,messages})});
-  const j=await r.json();return{content:j.choices[0].message.content}}},
  ollama:{label:'Ollama (local)',enabled:true,models:['llama3.2'],async chat({model,messages}){ // server detects + protects; raw text never reaches Ollama
-  const r=await fetch(LLM.cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-User':L.user},body:JSON.stringify({provider:'ollama',model,messages})});
+  const r=await api(LLM.cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:'ollama',model,messages})});
   const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||('HTTP '+r.status));
   return{content:j.message.content,guard:j.pii_guard}}}}};
-const DET=[['Credit Card',/\b(?:\d[ -]?){13,16}\b/g,98],['SSN / Aadhaar',/\b\d{4}\s\d{4}\s\d{4}\b|\b\d{3}-\d{2}-\d{4}\b/g,95],['Email',/[\w.+-]+@[\w-]+\.[\w.]+/g,99],['IP Address',/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,97],['Phone',/\+?\d[\d\s-]{8,}\d/g,93],['Address',/\b\d{1,5}[A-Za-z]?,?\s+[A-Z]\w*(?:\s[A-Z]\w*)*\s(?:Street|St|Road|Rd|Avenue|Ave|Lane|Nagar)\b/g,86],['Name',/(?:my name is|I am|I'm|patient|customer|for|from|Mr\.|Ms\.|Dr\.)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)/g,95]];
-function detect(t){const out=[];DET.forEach(([ty,re,c])=>{for(const m of t.matchAll(re)){const v=m[1]||m[0].trim(),s=m.index+m[0].indexOf(v),e=s+v.length;if(!out.some(o=>s<o.e&&e>o.s))out.push({s,e,v,t:ty,c:Math.max(70,c-v.length%4)})}});return out.sort((a,b)=>a.s-b.s)}
-const hx=v=>{let h=5381;for(const c of v)h=(h*33^c.charCodeAt(0))>>>0;return h.toString(16).padStart(8,'0')};
-function apply(h){const p=POL.find(x=>x[0]==h.t);if(!p||!p[2])return{...h,out:h.v,act:'None'};let o;
- if(p[1]=='Mask'){const k=h.t=='Email'?h.v.split('@')[1].length+1:3,n=h.v.length-k;o=h.v.slice(0,n).replace(/[A-Za-z0-9]/g,'•')+h.v.slice(n)}
- else if(p[1]=='Redact')o='['+h.t.toUpperCase().replace(/\W+/g,'_')+']';
- else if(p[1]=='Hash')o='<h:'+hx(h.v)+'>';
- else o=h.t=='Name'?['Anita Verma','Rahul Menon','Sara Iyer','Daniel Costa'][parseInt(hx(h.v),16)%4]:h.t.replace(/\W+/g,'_')+'_'+hx(h.v).slice(0,4);
- return{...h,out:o,act:p[1]}}
 const seg=(t,items,f)=>{let p=0,s='';items.forEach(i=>{s+=esc(t.slice(p,i.s))+f(i);p=i.e});return s+esc(t.slice(p))};
-const L={provider:'ollama',model:'llama3.2',user:'user1',protect:1,msgs:[],sent:[],run:null,busy:0,draft:''};
+const L={model:'llama3.2',msgs:[],sent:[],run:null,busy:0,draft:''};
 const SAMPLES=["Draft a reply to Priya Raman (priya.raman@acme.in, +91 98765 43210) about the failed payment on card 4532 8891 0023 7714.","Customer Daniel Costa at 42 Residency Road reported a login from 10.24.8.17. Summarise the incident."];
 async function runPipeline(text){
- if(L.provider=='ollama'){const res=await LLM.providers.ollama.chat({model:L.model,messages:[...L.sent,{role:'user',content:text}]}),g=res.guard;
+ const res=await LLM.providers.ollama.chat({model:L.model,messages:[...L.sent,{role:'user',content:text}]}),g=res.guard;
   L.sent.push({role:'user',content:g.protected_prompt},{role:'assistant',content:res.content});
   const items=g.entities.map(e=>({s:e.start,e:e.end,v:e.value,t:e.entity_type,c:Math.round(e.score*100),act:e.operator_name,src:e.policy_source,out:Object.entries(e.operator_params).map(([k,v])=>k+'='+v).join(', ')||'(none)'}));
-  return{text,prot:g.protected_prompt,items,payload:g.ollama_request,response:res.content,protect:1,model:g.model_used,server:g}}
- const hits=detect(text),items=L.protect?hits.map(apply):hits.map(h=>({...h,out:h.v,act:'None'}));
- let prot='',p=0;items.forEach(i=>{prot+=text.slice(p,i.s)+i.out;p=i.e});prot+=text.slice(p);
- const payload={provider:L.provider,model:L.model,messages:[...L.sent,{role:'user',content:prot}]}; // <- the ONLY thing sent to the LLM
- const res=await LLM.providers[L.provider].chat(payload);L.sent.push({role:'user',content:prot},{role:'assistant',content:res.content});
- return{text,prot,items,payload,response:res.content,protect:L.protect,model:L.model}}
-async function send(){const t=L.draft.trim();if(!t||L.busy)return;L.busy=1;L.msgs.push({role:'user',text:t,p:L.protect});L.draft='';rl();
+  return{text,prot:g.protected_prompt,items,payload:g.ollama_request,response:res.content,model:g.model_used,server:g}}
+async function send(){const t=L.draft.trim();if(!t||L.busy)return;L.busy=1;L.msgs.push({role:'user',text:t});L.draft='';rl();
  try{const r=await runPipeline(t);L.run=r;L.msgs.push({role:'assistant',text:r.response})}catch(e){L.msgs.push({role:'assistant',text:'Error: '+e.message})}L.busy=0;rl()}
 function rl(){go();const c=$('.chat');if(c)c.scrollTop=1e9;const t=$('#pr');if(t&&!L.busy)t.focus()}
-V.llm=()=>{const r=L.run,P=LLM.providers,ap=r&&r.server?[...new Map(r.items.filter(i=>i.act!='None').map(i=>[i.t,i])).values()]:[];
-const opts=Object.entries(P).map(([k,p])=>`<optgroup label="${p.label}">${p.models.map(m=>`<option value="${k}|${m}" ${p.enabled?'':'disabled'} ${L.provider==k&&L.model==m?'selected':''}>${m}${p.enabled?'':' · not connected'}</option>`).join('')}</optgroup>`).join('');
+V.llm=()=>{const r=L.run,ap=r&&r.server?[...new Map(r.items.filter(i=>i.act!='None').map(i=>[i.t,i])).values()]:[];
 const active=L.busy?(L.msgs.length?3:0):-1;
-const st=[['User prompt','Raw input'],['PII detection',r?r.items.length+' entities':L.provider=='ollama'?'Presidio (server)':'Regex + NER'],['Mask / anonymize',L.protect?'Policy engine':'Skipped'],['Protected prompt',L.protect?'Safe to send':'Unprotected'],['LLM',L.model],['Response','Returned']];
+const st=[['User prompt','Raw input'],['PII detection',r?r.items.length+' entities':'Presidio (server)'],['Mask / anonymize','Policy engine'],['Protected prompt','Safe to send'],['LLM',L.model],['Response','Returned']];
 return head('LLM Playground','Test how prompts are protected before they reach a model')+`
 <div class="zone"><span>Inside your environment</span><span>External LLM</span></div>
 <div class="steps">${st.map((s,i)=>`<div class="step ${r||L.busy?'done':''} ${i==4?'out':''} ${i==5?'out':''}" style="${i==5?'border-left-style:none;padding-left:14px':''}"><span class="mono mu">0${i+1}</span><b>${s[0]}</b><small>${s[1]}</small></div>`).join('')}</div>
-<div class="tb ${L.protect?'':'bad'}"><b>${L.protect?'Only the protected prompt is sent to the LLM.':'Protection is OFF — the raw prompt will be sent to the LLM.'}</b> <span class="mu">${L.protect?'Original text never leaves your environment.':'Turn protection on to enforce your active policies.'}</span></div>
+<div class="tb"><b>Only the protected prompt is sent to the LLM.</b> <span class="mu">Original text never leaves your environment.</span></div>
 <div class="grid g2" style="margin-top:30px"><div class="card"><h3>Chat</h3>
-<div class="chat">${L.msgs.length?L.msgs.map(m=>`<div class="msg ${m.role=='user'?'u':''}"><small>${m.role=='user'?'You'+(m.p?' · protected before sending':' · sent raw'):L.model}</small>${esc(m.text)}</div>`).join(''):`<div class="mu" style="padding:20px 0">Enter a prompt containing personal data, or try a sample:</div>`}${L.busy?'<div class="msg mu">Processing…</div>':''}</div>
+<div class="chat">${L.msgs.length?L.msgs.map(m=>`<div class="msg ${m.role=='user'?'u':''}"><small>${m.role=='user'?'You · protected before sending':L.model}</small>${esc(m.text)}</div>`).join(''):`<div class="mu" style="padding:20px 0">Enter a prompt containing personal data, or try a sample:</div>`}${L.busy?'<div class="msg mu">Processing…</div>':''}</div>
 <div class="chips" style="margin:12px 0 0;border:0;gap:14px">${SAMPLES.map((s,i)=>`<span class="chip" style="border:0;padding:0;text-decoration:underline" onclick="L.draft=SAMPLES[${i}];rl()">Sample ${i+1}</span>`).join('')}<span class="chip" style="border:0;padding:0" onclick="L.msgs=[];L.sent=[];L.run=null;rl()">Clear</span></div>
 <textarea id="pr" rows="3" placeholder="Type a prompt… (Enter to send, Shift+Enter for new line)" oninput="L.draft=this.value" onkeydown="if(event.key=='Enter'&&!event.shiftKey){event.preventDefault();send()}">${esc(L.draft)}</textarea>
-<div class="row" style="margin-top:10px"><span class="mu">${L.protect?'Protection on':'Protection off'}</span><button class="btn" onclick="send()" ${L.busy?'disabled':''}>Send</button></div></div>
+<div class="row" style="margin-top:10px"><span class="mu">Protection on</span><button class="btn" onclick="send()" ${L.busy?'disabled':''}>Send</button></div></div>
 <div class="card"><h3>Settings</h3>
-<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Model</span><select onchange="[L.provider,L.model]=this.value.split('|');if(L.provider=='ollama')L.protect=1;rl()">${opts}</select></div>
-${L.provider=='ollama'?`<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Policy user<div class="mu" style="font-size:12px">Whose policy is applied (X-User header)</div></span><select onchange="L.user=this.value;rl()">${['user1','user2','admin'].map(u=>`<option ${L.user==u?'selected':''}>${u}</option>`).join('')}</select></div>`:''}
-<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>PII protection<div class="mu" style="font-size:12px">${L.provider=='ollama'?'Always enforced server-side for Ollama':'Apply active policies before sending'}</div></span><button class="sw ${L.protect?'on':''}" onclick="if(L.provider!='ollama')L.protect^=1;rl()"></button></div>
+<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Model</span><b>${esc(L.model)}</b></div>
+<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Policy user<div class="mu" style="font-size:12px">Taken from your signed-in token</div></span><b>${esc(AUTH.user)}</b></div>
 <div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Endpoint</span><span class="mono mu">${LLM.cfg.endpoint}</span></div>
-<div class="mu" style="margin-top:14px;font-size:12px">Ollama requests go to <span class="mono">/api/llm/chat</span>: the proxy detects PII, applies the caller's policy via the anonymizer service, and forwards only the protected prompt to the local model. The mock provider stays client-side.</div></div></div>`+(r?`
-<div class="card" style="margin-top:30px"><h3>Detected PII <span>${r.items.length} entities</span></h3>${r.items.length?`<div class="tw"><table><tr><th>Value</th><th>Type</th><th>Confidence</th><th>Policy</th><th>${r.server?'Operator params':'Protected output'}</th></tr>${r.items.map(i=>`<tr><td class="mono">${esc(i.v)}</td><td><b>${i.t}</b></td><td style="width:160px"><div class="row"><b>${i.c}%</b></div>${bar(i.c)}</td><td>${i.act=='None'?pill('Unprotected').replace('Unprotected',r.protect?'No policy':'Bypassed'):pill('Active').replace('Active',i.act)}</td><td class="mono">${esc(i.out)}</td></tr>`).join('')}</table></div>`:'<div class="mu">No PII detected in this prompt.</div>'}</div>
+<div class="mu" style="margin-top:14px;font-size:12px">Ollama requests go to <span class="mono">/api/llm/chat</span>: the proxy detects PII, applies the caller's policy via the anonymizer service, and forwards only the protected prompt to the local model.</div></div></div>`+(r?`
+<div class="card" style="margin-top:30px"><h3>Detected PII <span>${r.items.length} entities</span></h3>${r.items.length?`<div class="tw"><table><tr><th>Value</th><th>Type</th><th>Confidence</th><th>Policy</th><th>${r.server?'Operator params':'Protected output'}</th></tr>${r.items.map(i=>`<tr><td class="mono">${esc(i.v)}</td><td><b>${i.t}</b></td><td style="width:160px"><div class="row"><b>${i.c}%</b></div>${bar(i.c)}</td><td>${i.act=='None'?pill('Unprotected').replace('Unprotected','No policy'):pill('Active').replace('Active',i.act)}</td><td class="mono">${esc(i.out)}</td></tr>`).join('')}</table></div>`:'<div class="mu">No PII detected in this prompt.</div>'}</div>
 ${r.server?`<div class="card" style="margin-top:30px"><h3>Applied policy <span>user: ${esc(r.server.policy_user)}${r.server.policy_found?'':' · no policy found → default replace'}</span></h3>${ap.length?`<div class="tw"><table><tr><th>Entity type</th><th>Operator</th><th>Parameters</th><th>Source</th></tr>${ap.map(i=>`<tr><td><b>${i.t}</b></td><td>${pill('Active').replace('Active',i.act)}</td><td class="mono">${esc(i.out)}</td><td class="mu">${esc(i.src)}</td></tr>`).join('')}</table></div>`:'<div class="mu">No PII detected, so no policy was applied.</div>'}</div>`:''}
 <div class="grid g2" style="margin-top:30px"><div class="card"><h3>Original prompt <span class="pill Critical">Stays here</span></h3><div class="pre mono">${seg(r.text,r.items,i=>`<mark>${esc(i.v)}</mark>`)}</div></div>
-<div class="card"><h3>Protected prompt <span class="pill ${r.protect?'Protected':'Critical'}">${r.protect?'Sent to LLM':'Raw sent'}</span></h3><div class="pre mono">${r.server?esc(r.prot):seg(r.text,r.items,i=>`<mark class="${i.act=='None'?'':'m'}">${esc(i.out)}</mark>`)}</div></div></div>
+<div class="card"><h3>Protected prompt <span class="pill Protected">Sent to LLM</span></h3><div class="pre mono">${esc(r.prot)}</div></div></div>
 <div class="grid g2" style="margin-top:30px"><div class="card"><h3>Outbound request to LLM <span class="mu">${r.server?esc(r.server.ollama_url)+' · ':''}${r.model}</span></h3><div class="pre mono" style="line-height:1.6;max-height:260px;overflow:auto">${esc(JSON.stringify(r.payload,null,2))}</div></div>
 <div class="card"><h3>LLM response <span class="mu">model: ${esc(r.model)}</span></h3><div class="pre" style="line-height:1.7">${esc(r.response)}</div></div></div>`:'')};
 
-function nav(p){location.hash=p}
-function go(keep){const ph=$('#q'),pos=ph?ph.selectionStart:0;$('#m').innerHTML=V[page]();$('#nav').innerHTML=PAGES.map((p,i)=>`<a class="${p[0]==page?'on':''}" onclick="nav('${p[0]}')"><span>${String(i+1).padStart(2,'0')}</span>${p[2]}</a>`).join('');if(keep){const n=$('#q');n.focus();n.setSelectionRange(pos,pos)}else $('#m').scrollTop=0}
+/* ---------- Policy Engine: /api/policies and /api/users (admin only; enforced by the server) ---------- */
+const PE={loaded:0,loading:0,policies:[],users:[],ed:null,err:'',ok:''};
+const OPS=['mask','redact','replace','hash'],ENT=['PERSON','EMAIL_ADDRESS','PHONE_NUMBER','CREDIT_CARD','US_SSN','US_BANK_NUMBER','IP_ADDRESS','LOCATION','DATE_TIME','URL','IBAN_CODE','US_DRIVER_LICENSE','US_PASSPORT','MEDICAL_LICENSE','CRYPTO','NRP'];
+const qa=s=>esc(s).replace(/"/g,'&quot;');
+const errMsg=async r=>{const j=await r.json().catch(()=>({})),d=j.detail;return Array.isArray(d)?d.map(x=>String(x.msg).replace(/^Value error, /,'')).join(' · '):(d||'HTTP '+r.status)};
+const defParams=o=>o=='mask'?{chars_to_mask:'10',masking_char:'*',from_end:false}:o=='replace'?{new_value:''}:o=='hash'?{hash_type:'sha256'}:{};
+async function peLoad(){PE.loading=1;
+ try{const[a,b]=await Promise.all([api('/api/policies'),api('/api/users')]);if(a.status==401||b.status==401){PE.loading=0;return}
+  if(!a.ok)throw new Error(await errMsg(a));if(!b.ok)throw new Error(await errMsg(b));PE.policies=await a.json();PE.users=await b.json();PE.err=''}
+ catch(e){PE.err='Could not load policies: '+e.message}
+ PE.loaded=1;PE.loading=0;go()}
+async function peCall(method,url,body,okMsg){PE.err=PE.ok='';
+ try{const r=await api(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(r.status==401)return false;
+  if(!r.ok){PE.err=await errMsg(r);go();return false}PE.ok=okMsg;await peLoad();return true}
+ catch(e){PE.err='Request failed: '+e.message;go();return false}}
+function peNew(){PE.err=PE.ok='';PE.ed={isNew:true,name:'',rules:[{entity_type:'PERSON',operator_name:'replace',operator_params:defParams('replace')}]};go()}
+function peEdit(i){const p=PE.policies[i];PE.err=PE.ok='';PE.ed={isNew:false,name:p.policy_name,rules:JSON.parse(JSON.stringify(p.rules))};go()}
+function peCancel(){PE.ed=null;PE.err='';go()}
+function peAddRule(){const used=PE.ed.rules.map(r=>r.entity_type);PE.ed.rules.push({entity_type:ENT.find(e=>!used.includes(e))||'',operator_name:'mask',operator_params:defParams('mask')});go()}
+function peDelRule(i){PE.ed.rules.splice(i,1);go()}
+function peSetEnt(i,v){PE.ed.rules[i].entity_type=v.trim().toUpperCase()}
+function peSetOp(i,v){PE.ed.rules[i].operator_name=v;PE.ed.rules[i].operator_params=defParams(v);go()}
+function peParam(i,k,v){PE.ed.rules[i].operator_params[k]=v}
+function peSave(){const e=PE.ed,rules=e.rules.map(r=>{const p=r.operator_params,o=r.operator_name;let q={};
+  if(o=='mask')q={chars_to_mask:parseInt(p.chars_to_mask,10),masking_char:p.masking_char||'*',from_end:!!p.from_end};
+  else if(o=='replace'){if(p.new_value)q={new_value:p.new_value}}else if(o=='hash')q={hash_type:p.hash_type||'sha256'};
+  return{entity_type:r.entity_type,operator_name:o,operator_params:q}});
+ (e.isNew?peCall('POST','/api/policies',{policy_name:e.name.trim(),rules},'Policy created.'):peCall('PUT','/api/policies/'+encodeURIComponent(e.name),{rules},'Policy updated. It applies to the next request.')).then(ok=>{if(ok)PE.ed=null;go()})}
+function peDelete(i){const n=PE.policies[i].policy_name;if(confirm('Delete policy '+n+'?'))peCall('DELETE','/api/policies/'+encodeURIComponent(n),null,'Policy deleted.')}
+function peAssign(i,v){const u=PE.users[i].user_name;peCall('PUT','/api/users/'+encodeURIComponent(u)+'/policy',{policy_name:v||null},'Assigned '+(v||'no policy')+' to '+u+'. It applies to their next request.')}
+function peParams(r,i){const p=r.operator_params,o=r.operator_name;
+ if(o=='mask')return`<input type="number" min="0" style="width:64px" value="${qa(p.chars_to_mask)}" oninput="peParam(${i},'chars_to_mask',this.value)"> chars with <input maxlength="1" style="width:28px;text-align:center" value="${qa(p.masking_char)}" oninput="peParam(${i},'masking_char',this.value)"> <label class="mu"><input type="checkbox" style="width:auto" ${p.from_end?'checked':''} onchange="peParam(${i},'from_end',this.checked)"> from end</label>`;
+ if(o=='replace')return`<input placeholder="&lt;ENTITY&gt; (default)" style="width:180px" value="${qa(p.new_value||'')}" oninput="peParam(${i},'new_value',this.value)">`;
+ if(o=='hash')return`<select onchange="peParam(${i},'hash_type',this.value)">${['sha256','sha512'].map(h=>`<option ${p.hash_type==h?'selected':''}>${h}</option>`).join('')}</select>`;
+ return'<span class="mu">removes the text</span>'}
+V.policy=()=>{const adm=AUTH.role=='admin',hd=head('Policy Engine','Rules per PII type, enforced inline on GET and in the LLM Playground',adm?`<button class="btn g" onclick="PE.loaded=0;go()">Refresh</button><button class="btn" onclick="peNew()">+ New policy</button>`:'');
+ if(!adm)return hd+`<div class="card"><div class="mu">Only administrators can view or change policies.</div></div>`;
+ if(!PE.loaded&&!PE.loading)peLoad();
+ const msg=(PE.err?`<div class="tb bad"><b>${esc(PE.err)}</b></div>`:'')+(PE.ok?`<div class="tb"><b>${esc(PE.ok)}</b></div>`:''),e=PE.ed;
+ const editor=e?`<div class="card" style="margin-top:24px"><h3>${e.isNew?'New policy':'Edit policy'}</h3>
+<div class="row" style="justify-content:flex-start;margin-bottom:14px"><span class="mu">Name</span><input placeholder="e.g. analyst_policy" maxlength="64" style="width:260px" value="${qa(e.name)}" ${e.isNew?'':'disabled'} oninput="PE.ed.name=this.value"></div>
+<div class="tw"><table><tr><th>PII type</th><th>Action</th><th>Parameters</th><th></th></tr>${e.rules.map((r,i)=>`<tr><td><input list="ents" style="width:190px" value="${qa(r.entity_type)}" oninput="peSetEnt(${i},this.value)"></td><td><select onchange="peSetOp(${i},this.value)">${OPS.map(o=>`<option ${o==r.operator_name?'selected':''}>${o}</option>`).join('')}</select></td><td>${peParams(r,i)}</td><td><button class="btn g" onclick="peDelRule(${i})" title="Remove rule">✕</button></td></tr>`).join('')}</table></div>
+<datalist id="ents">${ENT.map(x=>`<option value="${x}">`).join('')}</datalist>
+<div class="row" style="justify-content:flex-start;margin-top:14px"><button class="btn g" onclick="peAddRule()">+ Add rule</button><button class="btn" onclick="peSave()">Save</button><button class="btn g" onclick="peCancel()">Cancel</button></div></div>`:'';
+ const rows=PE.policies.map((p,i)=>`<tr><td><b>${esc(p.policy_name)}</b></td><td class="mono">${p.rules.map(x=>esc(x.entity_type)+' <span class="mu">'+esc(x.operator_name)+'</span>').join('<br>')}</td><td>${p.assigned_users.length?p.assigned_users.map(esc).join(', '):'<span class="mu">nobody</span>'}</td><td style="white-space:nowrap"><button class="btn g" onclick="peEdit(${i})">Edit</button> <button class="btn g" onclick="peDelete(${i})">Delete</button></td></tr>`).join('');
+ const urows=PE.users.map((u,i)=>`<tr><td><b>${esc(u.user_name)}</b></td><td class="mu">${esc(u.role)}</td><td><select onchange="peAssign(${i},this.value)"><option value="" ${u.policy_name?'':'selected'}>(no policy: original file)</option>${PE.policies.map(p=>`<option ${p.policy_name==u.policy_name?'selected':''}>${esc(p.policy_name)}</option>`).join('')}</select></td></tr>`).join('');
+ return hd+msg+`<div class="card" style="margin-top:24px"><h3>Policies <span>${PE.policies.length}</span></h3>${PE.loading&&!PE.loaded?'<div class="mu">Loading…</div>':`<div class="tw"><table><tr><th>Name</th><th>Rules</th><th>Assigned to</th><th></th></tr>${rows||'<tr><td colspan="4" class="mu">No policies yet.</td></tr>'}</table></div>`}</div>${editor}
+<div class="card" style="margin-top:24px"><h3>User assignments</h3><div class="tw"><table><tr><th>User</th><th>Role</th><th>Policy</th></tr>${urows||'<tr><td colspan="3" class="mu">No users.</td></tr>'}</table></div></div>
+<div class="grid g4" style="margin-top:24px">${[['mask','Hide N characters, keep the rest'],['redact','Remove the text entirely'],['replace','Substitute a fixed value'],['hash','SHA-256 / SHA-512 digest']].map(a=>`<div class="card"><b>${a[0]}</b><div class="mu" style="margin-top:4px">${a[1]}</div></div>`).join('')}</div>`};
+
+/* ---------- Authentication: JWT kept in sessionStorage (cleared when the tab closes) ---------- */
+const AUTH={token:null,user:null,role:null,exp:0};
+try{const a=JSON.parse(sessionStorage.getItem('pii_auth')||'null');if(a&&a.token&&a.exp>Date.now())Object.assign(AUTH,a)}catch(e){}
+function showLogin(msg){$('#login').hidden=false;$('#lerr').textContent=msg||'';$('#lu').focus()}
+function logout(msg){AUTH.token=AUTH.user=AUTH.role=null;AUTH.exp=0;try{sessionStorage.removeItem('pii_auth')}catch(e){}L.msgs=[];L.sent=[];L.run=null;L.draft='';PE.loaded=0;PE.ed=null;PE.err=PE.ok='';showLogin(msg)}
+async function api(url,opt={}){const r=await fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:'Bearer '+AUTH.token}});if(r.status==401)logout('Your session has expired. Please sign in again.');return r}
+async function doLogin(ev){ev.preventDefault();const b=$('#lb');b.disabled=true;$('#lerr').textContent='';
+ try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('#lu').value.trim(),password:$('#lp').value})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){$('#lerr').textContent=r.status==401?'Invalid username or password.':(typeof j.detail=='string'?j.detail:'Sign-in failed (HTTP '+r.status+').');return}
+  Object.assign(AUTH,{token:j.access_token,user:j.user.username,role:j.user.role,exp:Date.now()+j.expires_in*1000});
+  try{sessionStorage.setItem('pii_auth',JSON.stringify(AUTH))}catch(e){}
+  $('#lp').value='';$('#login').hidden=true;go()}
+ catch(e){$('#lerr').textContent='Cannot reach the server.'}finally{b.disabled=false}}
+function nav(p){if(p=='policy')PE.loaded=0;location.hash=p}
+function go(keep){if(!AUTH.token){showLogin();return}const ph=$('#q'),pos=ph?ph.selectionStart:0;$('#m').innerHTML=V[page]();$('#nav').innerHTML=PAGES.map((p,i)=>`<a class="${p[0]==page?'on':''}" onclick="nav('${p[0]}')"><span>${String(i+1).padStart(2,'0')}</span>${p[2]}</a>`).join('');if(keep){const n=$('#q');n.focus();n.setSelectionRange(pos,pos)}else $('#m').scrollTop=0}
 addEventListener('hashchange',()=>{page=location.hash.slice(1)||'dash';if(!V[page])page='dash';go()});
 if(!V[page])page='dash';go();
 </script></body></html>

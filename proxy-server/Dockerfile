@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt \
  && python -m spacy download en_core_web_sm
 
 COPY config.py /app/config.py
+COPY security.py /app/security.py
 COPY common/ /app/common/
 COPY anonymizer/pb/ /app/anonymizer/pb/
 COPY consumer_analyzer/ /app/consumer_analyzer/

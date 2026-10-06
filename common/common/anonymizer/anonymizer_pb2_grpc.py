@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import pb.anonymizer.anonymizer_pb2 as anonymizer__pb2
+import common.anonymizer.anonymizer_pb2 as anonymizer__pb2
 
 GRPC_GENERATED_VERSION = '1.75.0'
 GRPC_VERSION = grpc.__version__

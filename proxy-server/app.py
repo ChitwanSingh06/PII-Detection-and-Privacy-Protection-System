@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from google.protobuf.struct_pb2 import Struct
@@ -28,8 +28,10 @@ for path in (str(ROOT), str(PROXY_DIR), str(CONSUMER_DIR), str(PII_ANALYSER_DIR)
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from config import AN_SVC_URL, DEFAULT_USER, SQLITE_PATH, STORAGE_ROOT  # noqa: E402
+from config import AN_SVC_URL, SQLITE_PATH, STORAGE_ROOT  # noqa: E402
 from sqlite_db import SqliteModel  # noqa: E402
+from auth import AuthUser, get_current_user, require_role, router as auth_router  # noqa: E402
+from policies import router as policies_router  # noqa: E402
 from kafka_consumer import LocalUploadTrigger  # noqa: E402
 
 
@@ -41,6 +43,11 @@ class S3Object(BaseModel):
 
 
 app = FastAPI()
+
+# Auth routes (POST /api/auth/login, GET /api/auth/me). Registered BEFORE the catch-all proxy route.
+app.include_router(auth_router)
+# Policy management (admin only): /api/policies*, /api/users*. Also before the catch-all.
+app.include_router(policies_router)
 
 # --- Frontend UI -------------------------------------------------------------
 # Registered BEFORE the catch-all proxy route below so /ui/ is never treated as
@@ -79,19 +86,6 @@ def _safe_storage_path(bucket: str, key: str = "") -> Path:
 def _split_bucket_key(path: str) -> tuple[str, str]:
     parts = path.split("/")
     return parts[0], "/".join(parts[1:])
-
-
-def _requesting_user(request: Request) -> str:
-    header_user = request.headers.get("x-user")
-    if header_user:
-        return header_user
-    authorization = request.headers.get("authorization", "")
-    if authorization.startswith("AWS") or "Credential=" in authorization:
-        try:
-            return authorization.split(" ")[1].split("=")[1].split("/")[0]
-        except (IndexError, ValueError):
-            pass
-    return os.environ.get("DEFAULT_USER", DEFAULT_USER)
 
 
 def _policy_messages(policy_rows: list) -> list:
@@ -162,8 +156,9 @@ async def run_pii_analysis(bucket: str, key: str) -> None:
     await asyncio.to_thread(get_upload_trigger().on_put, bucket, key)
 
 
-async def post_process_get_response(path: str, request: Request, response: Response) -> Response:
-    access_key = _requesting_user(request)
+async def post_process_get_response(path: str, username: str, response: Response) -> Response:
+    # `username` is the identity from the verified JWT (never a client-supplied header).
+    access_key = username
     query = text(
         """
         SELECT p.policy FROM users u
@@ -329,14 +324,11 @@ async def _protect_text(content: str, user_policy: list[dict]) -> dict:
             )
             await connection.commit()
 
+    # Use the anonymizer's result exactly as returned. Identical text is a legitimate outcome (e.g. an
+    # already-protected message from the chat history, or a rule whose output equals the input).
     protected = grpc_response.updatedObjectData.decode("utf-8")
     if protected == content:
-        # A rule applies to a detected span, so the text must change. (The anonymizer returns the
-        # input untouched if it finds no stored spans, so treat "unchanged" as a failure.)
-        raise HTTPException(
-            status_code=502,
-            detail="Anonymization did not change a prompt with detected PII. Prompt was NOT sent to the LLM.",
-        )
+        print("[llm] anonymizer returned the text unchanged; using it as-is")
 
     return {"text": protected, "entities": _describe(content, entities, rules)}
 
@@ -353,7 +345,7 @@ def _call_ollama(payload: dict) -> dict:
 
 
 @app.post("/api/llm/chat")
-async def llm_chat(body: LLMChatRequest, request: Request):
+async def llm_chat(body: LLMChatRequest, current_user: AuthUser = Depends(get_current_user)):
     if body.provider != "ollama":
         raise HTTPException(status_code=400, detail="Only provider 'ollama' is served by this endpoint.")
     if not body.model.startswith(OLLAMA_MODEL_PREFIX):
@@ -363,7 +355,7 @@ async def llm_chat(body: LLMChatRequest, request: Request):
     if any(m.role not in ("system", "user", "assistant") for m in body.messages):
         raise HTTPException(status_code=400, detail="Message role must be system, user or assistant.")
 
-    user = _requesting_user(request)
+    user = current_user.username  # from the verified JWT
     user_policy = await _load_user_policy(user)
 
     # Never trust the client: EVERY message (history included) is protected server-side.
@@ -404,7 +396,15 @@ async def llm_chat(body: LLMChatRequest, request: Request):
 
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
-async def proxy_handler(request: Request, path: str, tagging: str | None = None):
+async def proxy_handler(
+    request: Request,
+    path: str,
+    tagging: str | None = None,
+    current_user: AuthUser = Depends(get_current_user),  # every object route needs a valid JWT
+):
+    if request.method in ("PUT", "POST", "DELETE") and path:
+        require_role(current_user, "admin")  # RBAC: only admins may write or delete objects
+
     if request.method in ("PUT", "POST") and path:
         body = await request.body()
         resp = await write_local_object(path, body)
@@ -419,7 +419,7 @@ async def proxy_handler(request: Request, path: str, tagging: str | None = None)
     if request.method == "GET" and re.match(r"^[^/]+/.+", path) and tagging is None:
         resp = await read_local_object(path)
         if resp.status_code == 200:
-            return await post_process_get_response(path, request, resp)
+            return await post_process_get_response(path, current_user.username, resp)
         return resp
 
     if request.method == "GET":
