@@ -294,7 +294,7 @@ def test_llm_uses_edited_policy(client, admin_h, user1_h, monkeypatch):
     seen = []
 
     async def fake_protect(content, policy):
-        seen.append([r["entity_type"] for r in policy])
+        seen.append([r["entity_type"] for r in policy.rules])  # EffectivePolicy: the caller's own rules
         return {"text": content, "entities": []}
 
     monkeypatch.setattr(proxy_app, "_protect_text", fake_protect)

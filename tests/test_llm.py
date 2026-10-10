@@ -47,14 +47,23 @@ def env(monkeypatch):
     from anonymizer.pii_anonymizer import PIIAnonymizer
 
     store, ollama, anonymizer_calls = {}, [], []
+    flags = SimpleNamespace(analyzer_down=False, span_store_down=False)
 
     class Analyzer:
-        def analyze(self, text):
+        def analyze(self, text, raise_on_error=False):
+            if flags.analyzer_down:
+                if raise_on_error:
+                    raise RuntimeError("analyzer down")
+                return []  # the real analyzer's default: an error looks exactly like "no PII found"
             return [{"type": t, "start": text.index(v), "end": text.index(v) + len(v), "score": 0.9}
                     for v, t in KNOWN.items() if v in text]
 
     class SpanDB:  # the proxy stores spans here; the anonymizer reads them back by bucket/key
-        def store_pii_results(self, bucket, key, entities):
+        def store_pii_results(self, bucket, key, entities, raise_on_error=False):
+            if flags.span_store_down:
+                if raise_on_error:
+                    raise OSError("database is locked")
+                return  # the real writer's default: log and carry on
             store[(bucket, key)] = entities
 
     class Channel:
@@ -86,7 +95,7 @@ def env(monkeypatch):
     monkeypatch.setattr(proxy_app.grpc.aio, "insecure_channel", lambda url: Channel())
     monkeypatch.setattr(proxy_app.an_pb2_grpc, "PIIAnonymizerServiceStub", Stub)
     monkeypatch.setattr(proxy_app, "_call_ollama", fake_ollama)
-    return SimpleNamespace(ollama=ollama, anonymizer_calls=anonymizer_calls, store=store)
+    return SimpleNamespace(ollama=ollama, anonymizer_calls=anonymizer_calls, store=store, flags=flags)
 
 
 def chat(client, headers, *contents, roles=None):
@@ -124,20 +133,26 @@ def test_user1_prompt_is_protected_by_user1_policy_and_only_that_reaches_ollama(
     assert body["message"]["content"] == "LLM-REPLY"  # the model's actual reply is returned
 
 
-def test_admin_has_no_policy_and_gets_the_existing_default_behaviour(client, admin_h, env):
+def test_admin_with_no_applicable_rules_sends_the_original_prompt_unchanged(client, admin_h, env):
     r = chat(client, admin_h, PROMPT)
     assert r.status_code == 200
-    assert sent_to_ollama(env) == NO_POLICY_OUT
-    assert r.json()["pii_guard"]["policy_user"] == "admin" and r.json()["pii_guard"]["policy_found"] is False
-    assert not any(p in json.dumps(env.ollama[0]) for p in PII)
+    assert sent_to_ollama(env) == PROMPT                      # byte-for-byte, nothing masked
+    assert env.anonymizer_calls == []                         # the anonymizer was never involved
+    guard = r.json()["pii_guard"]
+    assert guard["policy_user"] == "admin" and guard["policy_found"] is False
+    assert guard["policy_mode"] == "passthrough" and guard["masking_applied"] is False
+    assert guard["protected_prompt"] == PROMPT and guard["ollama_request"] == env.ollama[0]
+    # detection is separate from anonymization: the findings are still reported, with no rule behind them
+    assert {e["entity_type"] for e in guard["entities"]} == {"PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"}
+    assert {e["operator_name"] for e in guard["entities"]} == {"None"}
 
 
 def test_admin_and_user1_use_their_own_policies(client, admin_h, user1_h, env):
     chat(client, admin_h, PROMPT)
     chat(client, user1_h, PROMPT)
-    assert env.ollama[0]["messages"][-1]["content"] == NO_POLICY_OUT
-    assert env.ollama[1]["messages"][-1]["content"] == USER1_OUT
-    assert NO_POLICY_OUT != USER1_OUT
+    assert env.ollama[0]["messages"][-1]["content"] == PROMPT      # admin: no rules apply
+    assert env.ollama[1]["messages"][-1]["content"] == USER1_OUT   # user1: exactly user1_policy
+    assert PROMPT != USER1_OUT
 
 
 def test_user2_uses_user2_policy(client, env):
@@ -248,3 +263,162 @@ def test_only_ollama_llama32_is_accepted(client, user1_h, env):
     assert client.post("/api/llm/chat", json=bad_provider, headers=user1_h).status_code == 400
     assert client.post("/api/llm/chat", json=bad_model, headers=user1_h).status_code == 400
     assert env.ollama == []
+
+
+# ====================================================================================================
+# Regression: an admin whose effective policy has no applicable masking rules must be sent UNCHANGED,
+# regular users keep exactly their own protection, and errors never silently bypass an applicable policy.
+# ====================================================================================================
+def set_policy(client, admin_h, user, policy):
+    r = client.put(f"/api/users/{user}/policy", headers=admin_h, json={"policy_name": policy})
+    assert r.status_code == 200, r.text
+
+
+def test_admin_prompt_is_not_masked_for_any_message_in_the_conversation(client, admin_h, env):
+    r = chat(client, admin_h, "Email priya.raman@acme.in", "ok", PROMPT, roles=["user", "assistant", "user"])
+    assert r.status_code == 200
+    assert [m["content"] for m in env.ollama[0]["messages"]] == ["Email priya.raman@acme.in", "ok", PROMPT]
+    assert env.anonymizer_calls == [] and env.store == {}  # no span was even staged for the anonymizer
+
+
+def test_admin_with_an_assigned_policy_gets_exactly_that_policy(client, admin_h, env):
+    set_policy(client, admin_h, "admin", "user2_policy")
+    r = chat(client, admin_h, PROMPT)
+    assert sent_to_ollama(env) == USER2_OUT  # user2_policy keeps names: PERSON stays, no default is added
+    assert env.anonymizer_calls[-1] == {"CREDIT_CARD": "mask", "EMAIL_ADDRESS": "mask", "PHONE_NUMBER": "replace",
+                                        "US_SSN": "redact", "US_BANK_NUMBER": "mask"}
+    guard = r.json()["pii_guard"]
+    assert guard["policy_mode"] == "assigned" and guard["policy_found"] is True and guard["masking_applied"] is True
+
+    set_policy(client, admin_h, "admin", None)  # unassigned again -> the very next prompt is unchanged
+    chat(client, admin_h, PROMPT)
+    assert sent_to_ollama(env) == PROMPT
+
+
+def test_admin_policy_with_no_matching_rule_leaves_the_prompt_untouched(client, admin_h, env):
+    rules = [{"entity_type": "US_SSN", "operator_name": "redact"}]
+    client.post("/api/policies", headers=admin_h, json={"policy_name": "ssn_only", "rules": rules})
+    set_policy(client, admin_h, "admin", "ssn_only")
+    chat(client, admin_h, PROMPT)  # no SSN in the prompt: no rule applies, nothing is added on top
+    assert sent_to_ollama(env) == PROMPT and env.anonymizer_calls == []
+
+
+def test_regular_user_without_a_policy_still_gets_the_fail_safe_defaults(client, admin_h, user1_h, env):
+    set_policy(client, admin_h, "user1", None)
+    r = chat(client, user1_h, PROMPT)
+    assert sent_to_ollama(env) == NO_POLICY_OUT
+    guard = r.json()["pii_guard"]
+    assert guard["policy_mode"] == "default" and guard["policy_found"] is False and guard["masking_applied"] is True
+    assert {e["policy_source"] for e in guard["entities"]} == {"default (user has no policy)"}
+    assert not any(p in json.dumps(env.ollama[0]) for p in PII)
+
+
+def test_admin_passthrough_does_not_change_what_regular_users_receive(client, admin_h, user1_h, env):
+    from conftest import bearer
+    user2_h = bearer(client, "user2", "User2@12345")
+    chat(client, admin_h, PROMPT)
+    chat(client, user1_h, PROMPT)
+    chat(client, user2_h, PROMPT)
+    chat(client, admin_h, PROMPT)
+    assert [o["messages"][-1]["content"] for o in env.ollama] == [PROMPT, USER1_OUT, USER2_OUT, PROMPT]
+
+
+def test_demoted_admin_with_a_still_valid_token_is_protected_like_a_regular_user(client, admin_h, env):
+    conn = sqlite3.connect(config.SQLITE_PATH)  # restore_db puts the row back after the test
+    conn.execute("UPDATE users SET role='user' WHERE user_name='admin'")
+    conn.commit()
+    conn.close()
+    r = chat(client, admin_h, PROMPT)  # the token still says role=admin
+    assert r.status_code == 200
+    assert sent_to_ollama(env) == NO_POLICY_OUT and r.json()["pii_guard"]["policy_mode"] == "default"
+
+
+def test_strict_mode_never_adds_defaults_for_an_admin(client, admin_h, user1_h, env, monkeypatch):
+    import app as proxy_app
+    monkeypatch.setattr(proxy_app, "LLM_STRICT_PII", True)
+    monkeypatch.setitem(KNOWN, "https://example.com/x", "URL")  # a type neither seeded policy has a rule for
+    chat(client, admin_h, "Visit https://example.com/x " + PROMPT)
+    assert sent_to_ollama(env) == "Visit https://example.com/x " + PROMPT and env.anonymizer_calls == []
+    chat(client, user1_h, "Visit https://example.com/x")  # a regular user keeps the opt-in strict behaviour
+    assert sent_to_ollama(env) == "Visit <URL>"
+
+
+def test_detection_is_separate_from_anonymization(client, admin_h, user1_h, env):
+    import app as proxy_app
+    from auth import AuthUser
+    import asyncio
+
+    entities = [{"type": "PERSON", "start": 0, "end": 5, "score": 0.9}, {"type": "URL", "start": 6, "end": 9, "score": 0.9}]
+    admin = asyncio.run(proxy_app._resolve_effective_policy(AuthUser("admin", "admin")))
+    assert admin.mode == "passthrough" and proxy_app._applicable_rules(entities, admin) == {}
+    user = asyncio.run(proxy_app._resolve_effective_policy(AuthUser("user1", "user")))
+    assert user.mode == "assigned" and set(proxy_app._applicable_rules(entities, user)) == {r["entity_type"] for r in user.rules}
+    # detection itself never touches the anonymizer
+    assert asyncio.run(proxy_app._detect_pii(PROMPT))
+    assert env.anonymizer_calls == [] and env.store == {}
+
+
+# ---- errors never silently bypass an applicable policy -----------------------------------------------
+@pytest.mark.parametrize("who, assign", [("user1", None), ("user2", None), ("user1", "user2_policy")])
+def test_detection_failure_blocks_prompts_for_users_with_a_policy(client, admin_h, env, who, assign):
+    from conftest import bearer
+    pw = {"user1": "User1@12345", "user2": "User2@12345"}[who]
+    if assign:
+        set_policy(client, admin_h, who, assign)
+    env.flags.analyzer_down = True
+    r = chat(client, bearer(client, who, pw), PROMPT)
+    assert r.status_code == 502 and "NOT sent" in r.json()["detail"]
+    assert env.ollama == [] and env.anonymizer_calls == []
+    assert "Priya" not in r.text and "priya.raman" not in r.text  # the error never echoes the prompt
+
+
+def test_detection_failure_also_blocks_a_regular_user_who_only_has_the_default(client, admin_h, user1_h, env):
+    set_policy(client, admin_h, "user1", None)
+    env.flags.analyzer_down = True
+    assert chat(client, user1_h, PROMPT).status_code == 502 and env.ollama == []
+
+
+def test_detection_failure_blocks_an_admin_who_has_an_assigned_policy(client, admin_h, env):
+    set_policy(client, admin_h, "admin", "user1_policy")
+    env.flags.analyzer_down = True
+    assert chat(client, admin_h, PROMPT).status_code == 502 and env.ollama == []
+
+
+def test_detection_failure_for_a_passthrough_admin_has_nothing_to_bypass(client, admin_h, env):
+    env.flags.analyzer_down = True
+    r = chat(client, admin_h, PROMPT)  # no rule applies to this admin, so the original is forwarded as promised
+    assert r.status_code == 200 and sent_to_ollama(env) == PROMPT and r.json()["pii_guard"]["entities"] == []
+
+
+def test_failure_to_stage_spans_blocks_instead_of_forwarding_the_original(client, user1_h, env):
+    # without the staged spans the anonymizer service answers with the ORIGINAL text; that must not pass as protected
+    env.flags.span_store_down = True
+    r = chat(client, user1_h, PROMPT)
+    assert r.status_code == 502 and "NOT sent" in r.json()["detail"]
+    assert env.ollama == [] and env.anonymizer_calls == []
+
+
+def test_a_prompt_with_nothing_for_the_policy_to_mask_is_forwarded_as_written(client, user1_h, env):
+    chat(client, user1_h, "Server at 10.24.8.17 is down")  # user1_policy has no IP_ADDRESS rule
+    assert sent_to_ollama(env) == "Server at 10.24.8.17 is down" and env.anonymizer_calls == []
+
+
+# ---- the real analyzer / writer: errors can be surfaced, default behaviour is unchanged ----------------
+def test_analyzer_and_writer_default_behaviour_is_unchanged_but_can_raise(tmp_path):
+    from pii_analyser import PIIAnalyzer, SqlitePiiDB
+
+    class Broken:
+        def analyze(self, **kwargs):
+            raise RuntimeError("model not loaded")
+
+    analyzer = object.__new__(PIIAnalyzer)  # skip loading spaCy
+    analyzer.engine = Broken()
+    assert analyzer.analyze("Priya Raman") == []  # upload path: unchanged
+    with pytest.raises(RuntimeError):
+        analyzer.analyze("Priya Raman", raise_on_error=True)
+
+    writer = SqlitePiiDB()
+    writer.db_path = str(tmp_path)  # a directory: sqlite cannot open it
+    assert writer.store_pii_results("b", "k", []) is None  # unchanged: logged, not raised
+    with pytest.raises(Exception):
+        writer.store_pii_results("b", "k", [], raise_on_error=True)

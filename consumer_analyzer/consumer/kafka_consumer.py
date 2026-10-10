@@ -22,9 +22,10 @@ class LocalUploadTrigger:
     def __init__(self):
         self.processor = PIIProcessor()
 
-    def on_put(self, bucket_name: str, object_key: str) -> None:
+    def on_put(self, bucket_name: str, object_key: str):
+        """Analyze the object; returns the stored spans, or None if it could not be read."""
         logging.info(f"Local PUT trigger: analyzing {bucket_name}/{object_key}")
-        self.processor.process(bucket_name, object_key)
+        return self.processor.process(bucket_name, object_key)
 
 
 if __name__ == "__main__":

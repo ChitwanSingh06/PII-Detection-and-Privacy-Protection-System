@@ -1,8 +1,0 @@
-grpcio==1.75.0
-grpcio-tools==1.75.0
-sqlalchemy==2.0.20
-aiosqlite==0.20.0
-uvicorn==0.23.2
-fastapi==0.100.0
-pydantic==2.7.2
-PyJWT>=2.8,<3

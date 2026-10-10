@@ -55,7 +55,13 @@ class PIIAnalyzer:
             PIIAnalyzer._engine = AnalyzerEngine(nlp_engine=nlp_engine)
         self.engine = PIIAnalyzer._engine
 
-    def analyze(self, text):
+    def analyze(self, text, raise_on_error=False):
+        """Detect PII spans (detection only; nothing is anonymized here).
+
+        Default behaviour is unchanged: errors are logged and an empty list is returned (the upload path
+        relies on it). Callers that must not mistake "analysis failed" for "no PII found" (the LLM
+        Playground) pass raise_on_error=True and get the exception instead.
+        """
         try:
             logging.info("Running PII analysis")
             score_threshold = float(os.getenv("PII_SCORE_THRESHOLD", str(PII_SCORE_THRESHOLD)))
@@ -74,6 +80,8 @@ class PIIAnalyzer:
             return filtered
         except Exception as e:
             logging.error(f"Error during PII analysis: {e}")
+            if raise_on_error:
+                raise
             return []
 
 
@@ -81,7 +89,7 @@ class SqlitePiiDB:
     def __init__(self):
         self.db_path = os.getenv("SQLITE_PATH", SQLITE_PATH)
 
-    def store_pii_results(self, bucket_name, object_key, pii_entities):
+    def store_pii_results(self, bucket_name, object_key, pii_entities, raise_on_error=False):
         try:
             logging.info(f"Storing PII results for {object_key} in bucket {bucket_name}")
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -101,6 +109,8 @@ class SqlitePiiDB:
             conn.close()
         except Exception as e:
             logging.error(f"SQLite error: {e}")
+            if raise_on_error:
+                raise
 
 
 class PIIProcessor:
@@ -113,10 +123,11 @@ class PIIProcessor:
         text = self.storage.get_object_text(bucket_name, object_key)
         if text is None:
             logging.error(f"Skipping analysis; object not found: {bucket_name}/{object_key}")
-            return
+            return None
         pii_entities = self.analyzer.analyze(text)
         self.db.store_pii_results(bucket_name, object_key, pii_entities)
         logging.info(f"PII entities stored: {pii_entities}")
+        return pii_entities  # spans only (type/start/end/score); used for dashboard counts
 
 
 if __name__ == "__main__":

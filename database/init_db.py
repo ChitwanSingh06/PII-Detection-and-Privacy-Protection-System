@@ -129,6 +129,35 @@ def create_tables():
         """
     )
 
+    # Live Dashboard metrics (additive; the proxy also creates it on start). Counts and entity
+    # types only - detected PII values are never stored here. Never cleared by this script.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS dashboard_events (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at   TEXT    NOT NULL,
+            event_type   TEXT    NOT NULL,
+            source       TEXT    NOT NULL DEFAULT 'object',
+            actor        TEXT,
+            bucket_name  TEXT,
+            object_key   TEXT,
+            status       TEXT    NOT NULL,
+            entity_count INTEGER NOT NULL DEFAULT 0,
+            details      TEXT,
+            request_id   TEXT
+        );
+        """
+    )
+    # databases created before request_id existed: add the column in place (no rows touched)
+    if "request_id" not in {row[1] for row in cur.execute("PRAGMA table_info(dashboard_events)")}:
+        cur.execute("ALTER TABLE dashboard_events ADD COLUMN request_id TEXT")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_dashboard_events_created ON dashboard_events (created_at)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_dashboard_events_type ON dashboard_events (event_type, created_at)")
+    cur.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_dashboard_events_request "
+        "ON dashboard_events (request_id, event_type) WHERE request_id IS NOT NULL"
+    )
+
     cur.execute("DELETE FROM users")
     cur.execute("DELETE FROM policies")
 
