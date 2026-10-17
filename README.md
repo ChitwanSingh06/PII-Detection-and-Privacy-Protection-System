@@ -41,7 +41,7 @@ Copy `.env.example` to `.env` and **set `JWT_SECRET`** (see [Authentication & au
 | `JWT_ALGORITHM` | `HS256` (`HS384`/`HS512` also allowed) |
 | `JWT_EXPIRE_MINUTES` | `60` |
 
-`database/init_db.py` seeds the demo users below plus the sample mask/redact/replace policies. Users with no policy (including `admin`) receive the original file. Re-running it resets the `users` and `policies` tables; on a database created before authentication existed it also adds the `password_hash` and `role` columns.
+`database/init_db.py` seeds the demo users below plus the sample mask/redact/replace policies. Users with no policy (including `admin`) receive the original file. Re-running it is **safe**: it only creates missing tables/columns and adds demo users/policies that do not exist yet; existing rows are never modified or deleted. Two explicit flags: `--add-new-category-rules` (additive: adds Aadhaar / PIN / address / ZIP rules to the demo policies where a type has no rule yet) and `--reset-demo` (DESTRUCTIVE: the old wipe-and-reseed behaviour). On a database created before authentication existed it also adds the `password_hash` and `role` columns.
 
 ## Authentication & authorization
 
@@ -296,3 +296,37 @@ The tests use a temporary SQLite database and cover login, invalid credentials, 
 - `tests/` – authentication, RBAC, policy, LLM and dashboard tests
 - `database/init_db.py` – SQLite schema and demo users/policies
 - `common/` – shared protobuf stubs for the anonymizer RPC
+
+## Indian + US PII categories
+
+| Entity type | Detects | Validation / precision rules |
+| --- | --- | --- |
+| `PHONE_NUMBER` | Indian mobile + landline (`+91 98765 43210`, `09876543210`, `98765-43210`, `022-2345 6789`, ...) | Existing type, so existing phone rules apply. Starts 6-9, 10 digits; bare 10 digits need a phone word nearby; repeated digits rejected |
+| `IN_AADHAAR` | 12 digits, grouped (`xxxx xxxx xxxx`, `-`, `.`) or contiguous | Verhoeff checksum, first digit 2-9; contiguous needs an Aadhaar/UID word |
+| `IN_PIN_CODE` | 6-digit PIN (`560001`, `560 001`) | Valid postal circle + PIN/city/state/"India" context. Bare 6-digit numbers are never PINs |
+| `IN_ADDRESS` | House + street/locality + city/state/PIN; street-only (`42 Residency Road`) | Rule based; ends at the PIN or sentence end; never swallows another identifier |
+| `US_SSN` | `123-45-6789`, `123 45 6789`, `123.45.6789`, bare 9 digits | SSA structure (no 000/666/9xx, no 00 group, no 0000), known-invalid numbers; space/dot/bare forms need "SSN"/"social security" |
+| `CREDIT_CARD` | Visa, Mastercard, Amex (4-6-5), Discover, Diners, JCB, UnionPay, RuPay, Maestro, with space/`-`/`.` | Brand prefix + length + Luhn |
+| `US_ZIP_CODE` | `94105`, `94105-1234` | Needs a US state or "zip"/"postal code" before it |
+| `US_ADDRESS` | Street + unit + city + state + ZIP, or street only | Street suffix list; state/ZIP tail gives the high score |
+
+Look-alikes (order numbers, timestamps, `DATE_TIME`/`UK_NHS` false hits on digit runs, card lists) are filtered in `consumer_analyzer/pii_analyser/pii_recognizers.py`. All new types are normal policy entity types: add rules in the Policy Engine, or run `python database/init_db.py --add-new-category-rules`. The anonymizer resolves overlaps **policy-aware** (a span with no rule can no longer swallow one that has a rule). Indian phone numbers are reported as `PHONE_NUMBER`.
+
+## Admin-only pages and audit log
+
+`PII Detection`, `Analytics` and `Audit Logs` are admin-only in the UI (hidden from the sidebar and blocked) **and** in the API (`/api/admin/*` returns `401` without a token and `403` for non-admins; each denial is audited).
+
+| Endpoint (admin) | Returns |
+| --- | --- |
+| `GET /api/admin/pii-detection` | Category catalog with live counts / confidence, other types, latest detection results (offsets + scores only) |
+| `GET /api/admin/analytics?days=14&tz_offset_minutes=330` | PII distribution, region split, derived risk levels, coverage per bucket, detection-vs-protection timeline, anonymization by operator |
+| `GET /api/admin/audit-logs?limit=&offset=&event_type=&actor=&status=&q=` | Paged events + counts per type |
+| `GET /api/admin/audit-logs/export` | CSV of the filtered log (the export is itself audited) |
+
+Everything comes from SQLite (`pii_objects`, `dashboard_events`, `policies`, `users`) and the storage folder; nothing is generated. The UI refreshes the open page every 15 s and after operations (policy change, LLM prompt). `dashboard_events` now also records `login` (success/failure), `policy_change` (policy + entity types, no values), `access_denied` and `audit_export`. Matched text is never stored or returned (the LLM Playground API no longer returns `value`; the browser highlights from offsets). Non-admins only see their own events in `GET /api/dashboard/activity`.
+
+## Tests
+
+```bash
+python -m pytest -q          # 261 tests, uses temp DB/storage, never touches data/pii.db
+```

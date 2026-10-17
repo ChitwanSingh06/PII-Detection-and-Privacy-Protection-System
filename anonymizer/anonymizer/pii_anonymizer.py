@@ -30,10 +30,26 @@ class PIIAnonymizer:
     ) -> str:
         """Anonymize data as per policy map"""
 
+<<<<<<< HEAD
+        operators = self._create_operator_config(policy_map=policy_map)
+        # Policy-aware conflict resolution: Presidio drops any span that lies INSIDE another span, whatever
+        # the policy says. Without this filter an address span (or a spaCy ORGANIZATION) that has no rule
+        # could swallow a PIN code / e-mail / phone that DOES have a rule, and it would be returned unmasked.
+        # Spans of types without a rule only ever "keep" the text, so removing them changes nothing else.
+        analyzer_results = [
+            r for r in self._get_analyzer_data(pii_metadata=pii_metadata)
+            if r.entity_type in operators and r.entity_type != "DEFAULT"
+        ]
+        anonymized_result = self._anonymizer.anonymize(
+            text=object_data,
+            analyzer_results=analyzer_results,
+            operators=operators,
+=======
         anonymized_result = self._anonymizer.anonymize(
             text=object_data,
             analyzer_results=self._get_analyzer_data(pii_metadata=pii_metadata),
             operators=self._create_operator_config(policy_map=policy_map),
+>>>>>>> origin/main
         )
         return anonymized_result.text
 

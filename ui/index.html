@@ -57,25 +57,12 @@ textarea{width:100%;background:transparent;color:var(--tx);border:1px solid var(
 <label for="lu">Username</label><input id="lu" name="username" autocomplete="username" required maxlength="64">
 <label for="lp">Password</label><input id="lp" name="password" type="password" autocomplete="current-password" required maxlength="128">
 <div class="err" id="lerr" role="alert"></div><button class="btn" id="lb" type="submit">Sign in</button></form></div>
-<aside><div class="logo"><i></i><div>PII Guard<small>Object Storage</small></div></div><nav id="nav"></nav></aside>
+<aside><div class="logo"><i></i><div>PII Guard<small>Privacy Protection</small></div></div><nav id="nav"></nav></aside>
 <main id="m"></main>
 <script>
 const $=s=>document.querySelector(s);
-const PAGES=[['dash','◉','Dashboard'],['store','▤','Object Storage'],['detect','⌕','PII Detection'],['obj','▣','Object Details'],['policy','⚙','Policy Engine'],['anon','⇄','Anonymization'],['ana','◔','Analytics'],['audit','☰','Audit Logs'],['health','♥','System Health'],['sec','⛨','Security Overview'],['llm','✦','LLM Playground']];
-const TYPES=[['Name',4210,96],['Email',3120,99],['Phone',2480,94],['Address',1730,88],['Credit Card',910,98],['IP Address',1260,97],['SSN / Aadhaar',640,95],['Username',820,85]];
+const PAGES=[['dash','◉','Dashboard'],['detect','⌕','PII Detection'],['policy','⚙','Policy Engine'],['anon','⇄','Anonymization'],['ana','◔','Analytics'],['audit','☰','Audit Logs'],['llm','✦','LLM Playground']];
 const COL=['#1f4d3a','#4f7a65','#8fae9c','#c9a24a','#b3261e','#5b6b7a','#a9a597','#33383a'];
-const OBJ=[
-['customers_export.csv','prod-customer-data','csv','48.2 MB','Completed',312,'Critical','Protected'],
-['support_tickets_q3.json','support-archive','json','12.7 MB','Completed',148,'High','Protected'],
-['kyc_scans_batch7.pdf','kyc-documents','pdf','230 MB','Scanning',0,'Medium','Pending'],
-['payments_ledger.parquet','finance-raw','parquet','91.4 MB','Completed',527,'Critical','Partial'],
-['web_access_logs.log','ops-logs','log','1.2 GB','Completed',89,'Medium','Protected'],
-['hr_onboarding.docx','hr-confidential','docx','3.4 MB','Completed',64,'High','Unprotected'],
-['product_catalog.json','public-assets','json','6.1 MB','Completed',0,'Low','Protected'],
-['chat_transcripts.txt','support-archive','txt','27.9 MB','Completed',203,'High','Protected'],
-['ml_training_set.csv','ai-datasets','csv','780 MB','Unscanned',0,'Medium','Pending']];
-const LOG=[['09:42:11','svc-ingest','Upload','customers_export.csv','OK'],['09:42:19','pii-engine','PII Detection','312 entities found','Critical'],['09:42:20','policy-engine','Policy Applied','Email → Mask','OK'],['09:41:02','a.krishnan','Download','support_tickets_q3.json','Anonymized'],['09:38:47','anonymizer','Anonymization','payments_ledger.parquet','Partial'],['09:30:15','m.fernandes','Policy Change','Username → Hash (disabled)','Warn'],['09:22:08','ml-pipeline','Download','ml_training_set.csv','Denied'],['09:12:55','svc-ingest','Upload','hr_onboarding.docx','OK'],['09:12:58','pii-engine','PII Detection','64 entities found','High']];
-const SVC=[['Object Storage (S3 / X10000)','99.99%','12 ms'],['PII Detection Engine','99.94%','184 ms'],['Policy Engine','100%','6 ms'],['Anonymization Service','99.71%','241 ms'],['PostgreSQL Database','99.98%','4 ms'],['Proxy API Gateway','99.96%','21 ms'],['Kafka Event Bus','98.90%','—']];
 let page=location.hash.slice(1)||'dash',sel=0,bk='All',q='',lf='All';
 const pill=t=>`<span class="pill ${t.split(' ')[0]}">${t}</span>`;
 const bar=(p,c)=>`<div class="bar"><b style="width:${p}%;${c?'background:'+c:''}"></b></div>`;
@@ -87,8 +74,88 @@ return `<svg viewBox="0 0 ${w} ${h+4}" width="100%" preserveAspectRatio="none" s
 function hbars(rows){return rows.map(r=>`<div style="margin:11px 0"><div class="row"><span>${r[0]}</span><b>${r[1]}${r[2]||''}</b></div>${bar(r[3]??r[1])}</div>`).join('')}
 const head=(t,s,x='')=>`<div class="top"><div><h1>${t}</h1><div class="sub">${s}</div></div><div class="row">${x}<span class="mu">${esc(AUTH.user||'')} · ${esc(AUTH.role||'')}</span><button class="btn g" onclick="tg()">Theme</button><button class="btn g" onclick="logout()">Sign out</button></div></div>`;
 function tg(){const r=document.documentElement,d=getComputedStyle(r).getPropertyValue('--bg').trim()=='#101211';r.dataset.theme=d?'light':'dark'}
-function logTbl(rows){return `<div class="tw"><table><tr><th>Time</th><th>User</th><th>Event</th><th>Detail</th><th>Result</th></tr>${rows.map(r=>`<tr><td class="mono mu">${r[0]}</td><td>${r[1]}</td><td><b>${r[2]}</b></td><td>${r[3]}</td><td>${pill(r[4]=='OK'?'Completed':r[4]=='Denied'||r[4]=='Warn'?'Unprotected':r[4]=='Critical'||r[4]=='High'?r[4]:r[4]=='Partial'?'Partial':'Protected').replace(/>[^<]+</,'>'+r[4]+'<')}</td></tr>`).join('')}</table></div>`}
 const V={
+<<<<<<< HEAD
+dash(){return dashView()}};
+/* ---------- Live data store for the other data pages (nothing hardcoded: every number comes from the API) ---------- */
+const X={},AU={f:'',q:'',off:0,limit:25},TZ=()=>-new Date().getTimezoneOffset();
+const ADMIN_PAGES=new Set(['detect','ana','audit']),canSee=p=>!ADMIN_PAGES.has(p)||AUTH.role=='admin';
+const U={detect:()=>'/api/admin/pii-detection?limit=20',ana:()=>'/api/admin/analytics?days=14&tz_offset_minutes='+TZ(),
+ audit:()=>'/api/admin/audit-logs?limit='+AU.limit+'&offset='+AU.off+(AU.f?'&event_type='+encodeURIComponent(AU.f):'')+(AU.q?'&q='+encodeURIComponent(AU.q):''),
+ anon:()=>'/api/dashboard/anonymization?days=14&tz_offset_minutes='+TZ(),anact:()=>'/api/dashboard/activity?limit=100',pol:()=>'/api/policies'};
+const PAGE_DATA={detect:['detect'],ana:['ana'],audit:['audit'],anon:['anon','anact','pol']};
+async function xLoad(key){const s=X[key]||(X[key]={});if(s.loading)return;if(key=='pol'&&AUTH.role!='admin')return;s.loading=1;
+ try{const r=await api(U[key]());if(r.status==401){s.loading=0;return}
+  if(r.status==403){s.err='Administrator access is required.';s.data=null}
+  else if(!r.ok){s.err=await errMsg(r)}
+  else{const j=await r.json();s.data=key=='pol'?{items:j}:j.data;s.at=new Date();s.err=''}}
+ catch(e){s.err='Cannot reach the server ('+e.message+')'}
+ s.loading=0;if(AUTH.token&&PAGE_DATA[page]&&PAGE_DATA[page].includes(key))xPaint()}
+function xPaint(){const a=document.activeElement,m=$('#m');if(a&&m&&m.contains(a)&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return; // never repaint under a field being edited
+ const st=m?m.scrollTop:0;go(1);if(m)m.scrollTop=st}
+function refreshPage(){(PAGE_DATA[page]||[]).forEach(k=>xLoad(k))}
+function tick(force){if(!AUTH.token||(document.hidden&&!force))return;if(page=='dash')dbLoad();else refreshPage()}
+function refreshAll(){tick(true)} // called after operations (policy change, prompt sent, ...)
+function enter(){if(PAGE_DATA[page])refreshPage()}
+const xs=keys=>{const e=keys.map(k=>X[k]).find(s=>s&&s.err&&!s.data);if(e)return`<div class="tb bad"><b>Could not load data.</b> <span class="mu">${esc(e.err)}</span> <button class="btn g" style="margin-left:8px" onclick="refreshPage()">Retry</button></div>`;
+ if(keys.some(k=>!(X[k]&&X[k].at)&&!(k=='pol'&&AUTH.role!='admin')))return dbMsg('Loading…');return''};
+const stamp=keys=>{const t=keys.map(k=>X[k]&&X[k].at).filter(Boolean).sort().pop(),l=keys.some(k=>X[k]&&X[k].loading);return`<span class="mu" style="font-size:12px">${l?'Refreshing…':t?'Updated '+t.toLocaleTimeString([],{hour12:false})+' · auto-refresh 15s':''}</span>`};
+const refBtn=`<button class="btn g" onclick="refreshPage()">Refresh</button>`;
+const denied=t=>head(t,'Administrators only')+`<div class="card"><div class="mu">Only administrators can view this page.</div></div>`;
+const pc=v=>v==null?'—':Math.round(v*100)+'%';
+const dayLab=d=>new Date(d+'T00:00:00').toLocaleDateString([],{day:'2-digit',month:'short'});
+
+/* ---------- PII Detection (admin) ---------- */
+V.detect=()=>{if(!canSee('detect'))return denied('PII Detection');const hd=head('PII Detection','Supported categories with live counts and confidence from stored detections',stamp(['detect'])+refBtn),w=xs(['detect']);if(w)return hd+w;const d=X.detect.data;
+ const kp=`<div class="grid g4">${kpi('Objects scanned',fmtN(d.objects_scanned),'stored objects with detection results')}${kpi('Objects with PII',fmtN(d.objects_with_pii),'at least one entity')}${kpi('Entities detected',fmtN(d.total_entities),'in stored objects')}${kpi('Detection runs',fmtN(d.detection_runs_total),fmtN(d.detection_failures_total)+' failed')}</div>`;
+ const cats=d.categories.map((c,i)=>`<div class="card"><div class="row"><b>${esc(c.label)}</b><span class="dot" style="--c:${COL[i%COL.length]}"></span></div><div class="mono mu" style="font-size:11px">${esc(c.entity_type)} · ${esc(c.region)}</div><div class="v" style="font-size:24px;font-weight:700;margin:6px 0">${fmtN(c.count)}</div><div class="row mu" style="font-size:12px"><span>${fmtN(c.objects)} object${c.objects==1?'':'s'}</span><span>Avg confidence <b style="color:var(--tx)">${pc(c.avg_score)}</b></span></div>${bar(c.avg_score==null?0:Math.round(c.avg_score*100),COL[i%COL.length])}<div class="mu" style="font-size:11px;margin-top:6px">${esc(c.detector)}</div></div>`).join('');
+ const oth=d.other_types.length?`<div class="card" style="margin-top:16px"><h3>Other detected types <span>${d.other_types.length}</span></h3><div class="tw"><table><tr><th>Type</th><th>Entities</th><th>Objects</th><th>Avg confidence</th></tr>${d.other_types.map(t=>`<tr><td><b>${nice(t.entity_type)}</b></td><td>${fmtN(t.count)}</td><td>${fmtN(t.objects)}</td><td>${pc(t.avg_score)}</td></tr>`).join('')}</table></div></div>`:'';
+ const rows=d.latest_results.map(r=>{const sc=r.entities.map(e=>e.score),avg=sc.length?sc.reduce((a,b)=>a+b,0)/sc.length:null,det=[...new Set(r.entities.map(e=>e.detector))].join(', ');
+  const types=Object.entries(r.by_entity_type||{}).map(([t,n])=>`<span class="pill Active">${nice(t)} × ${fmtN(n)}</span>`).join(' ');
+  return`<tr><td class="mono mu" style="white-space:nowrap">${fmtT(r.timestamp)}</td><td><span class="mono">${esc(r.bucket+'/'+r.object_key)}</span>${r.object_exists?'':'<div class="mu" style="font-size:12px">object since deleted</div>'}</td><td>${r.status!='ok'?'<span class="pill Unprotected">Analysis failed</span>':types||'<span class="mu">No PII detected</span>'}</td><td style="width:150px">${avg==null?'<span class="mu">—</span>':`<div class="row"><b>${pc(avg)}</b></div>${bar(Math.round(avg*100))}`}</td><td class="mu">${esc(det||'—')}</td></tr>`}).join('');
+ return hd+kp+`<div class="grid g4" style="margin-top:34px">${cats}</div>${oth}<div class="card" style="margin-top:16px"><h3>Latest detection results <span>matched text is never shown</span></h3>${rows?`<div class="tw"><table><tr><th>Time</th><th>Object</th><th>Entities</th><th>Confidence</th><th>Detector</th></tr>${rows}</table></div>`:dbMsg('No detection runs yet. Upload a text object as admin (PUT /&lt;bucket&gt;/&lt;key&gt;); it is analysed on upload and appears here.')}</div>`};
+
+/* ---------- Anonymization (all roles; policy rules are visible to admins only) ---------- */
+V.anon=()=>{const hd=head('Anonymization','Applied policies, operators and outcomes from real GET and prompt events',stamp(['anon','anact'])+refBtn),w=xs(['anon','anact']);if(w)return hd+w;
+ const a=X.anon.data,evs=(X.anact.data.items||[]).filter(i=>i.event_type=='anonymization'||i.event_type=='download').slice(0,10);
+ const kp=`<div class="grid g4">${kpi('Requests anonymized',fmtN(a.anonymized_ok),fmtN(a.requests_total)+' policy-protected requests')}${kpi('Entities anonymized',fmtN(a.entities_anonymized),'masked, replaced, hashed or redacted')}${kpi('Failures',fmtN(a.failed),'original returned / prompt blocked')}${kpi('Served original',fmtN(a.served_original),'no policy rule applied')}</div>`;
+ const tl=a.timeline,v=tl.map(x=>x.anonymized);
+ const rules=AUTH.role=='admin'?`<div class="card" style="margin-top:16px"><h3>Active policy rules <span>from the Policy Engine</span></h3>${X.pol&&X.pol.data?`<div class="tw"><table><tr><th>Policy</th><th>PII type</th><th>Operator</th><th>Parameters</th><th>Assigned to</th></tr>${X.pol.data.items.flatMap(p=>p.rules.map(r=>`<tr><td><b>${esc(p.policy_name)}</b></td><td class="mono">${esc(r.entity_type)}</td><td>${pill('Active').replace('Active',esc(r.operator_name))}</td><td class="mono mu">${esc(Object.entries(r.operator_params||{}).map(([k,x])=>k+'='+x).join(', ')||'(none)')}</td><td>${p.assigned_users.length?p.assigned_users.map(esc).join(', '):'<span class="mu">nobody</span>'}</td></tr>`)).join('')||'<tr><td colspan="5" class="mu">No policies defined.</td></tr>'}</table></div>`:dbMsg('Loading…')}</div>`:'';
+ return hd+kp+`<div class="grid g2" style="margin-top:34px"><div class="card"><h3>By operator <span>${fmtN(a.by_operator.reduce((x,y)=>x+y.count,0))}</span></h3>${a.by_operator.length?dbDonut(a.by_operator.map(o=>[nice(o.name),o.count]),['#1f4d3a','#b3261e','#8fae9c','#c9a24a','#5b6b7a']):dbMsg('No anonymization has happened yet. It starts when a user with a policy reads an object or sends an LLM prompt.')}</div>
+<div class="card"><h3>By PII type <span>${fmtN(a.entities_anonymized)}</span></h3>${a.by_entity_type.length?dbDonut(a.by_entity_type.map(o=>[nice(o.name),o.count]),COL):dbMsg('Nothing anonymized yet.')}</div></div>
+<div class="grid g2" style="margin-top:16px"><div class="card"><h3>Anonymized requests · last ${a.window_days} days</h3>${Math.max(...v)?line(v)+`<div class="row mu" style="font-size:12px"><span>${dayLab(tl[0].date)}</span><span>${fmtN(v.reduce((x,y)=>x+y,0))} requests${a.failed?' · '+fmtN(a.failed)+' failed':''}</span><span>${dayLab(tl[tl.length-1].date)}</span></div>`:dbMsg('No anonymized requests in this period.')}</div>
+<div class="card"><h3>By source</h3>${a.by_source.length?a.by_source.map(s=>`<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${s.name=='llm_prompt'?'LLM prompts':s.name=='object'?'Object GETs':esc(s.name)}</span><b>${fmtN(s.count)}</b></div>`).join(''):dbMsg('No policy-protected requests yet.')}</div></div>${rules}
+<div class="card" style="margin-top:16px"><h3>Recent anonymization activity</h3>${evs.length?actTbl(evs):dbMsg('No anonymization activity recorded yet.')}</div>`};
+
+/* ---------- Analytics (admin) ---------- */
+V.ana=()=>{if(!canSee('ana'))return denied('Analytics');const hd=head('Analytics','Distribution, risk and protection coverage computed from stored data',stamp(['ana'])+refBtn),w=xs(['ana']);if(w)return hd+w;const d=X.ana.data,o=d.objects,an=d.anonymization;
+ const kp=`<div class="grid g4">${kpi('Stored objects',fmtN(o.stored),fmtN(o.scanned)+' scanned')}${kpi('Objects with PII',fmtN(o.with_pii),'by derived risk level below')}${kpi('Entities anonymized',fmtN(an.entities_anonymized),fmtN(an.anonymized_ok)+' requests')}${kpi('Failures',fmtN(an.failed),'anonymization failed')}</div>`;
+ const dp=d.detection_vs_protection,det=dp.map(x=>x.detected),pro=dp.map(x=>x.protected),any=Math.max(...det,...pro)>0;
+ const risk=d.risk_distribution,rt=risk.reduce((a,b)=>a+b.objects,0);
+ const cov=d.coverage_by_bucket;
+ return hd+kp+`<div class="grid g2" style="margin-top:34px"><div class="card"><h3>PII distribution <span>${fmtN(d.pii_distribution.reduce((a,b)=>a+b.count,0))}</span></h3>${d.pii_distribution.length?dbDonut(d.pii_distribution.map(t=>[nice(t.entity_type),t.count]),COL):dbMsg('No PII detected in stored objects yet.')}</div>
+<div class="card"><h3>Detection vs protection · last ${d.window_days} days</h3>${any?line(det,pro)+`<div class="row mu" style="font-size:12px"><span>● Detected (${fmtN(det.reduce((a,b)=>a+b,0))})</span><span style="color:var(--cr)">● Anonymized (${fmtN(pro.reduce((a,b)=>a+b,0))})</span></div><div class="row mu" style="font-size:12px"><span>${dayLab(dp[0].date)}</span><span>${dayLab(dp[dp.length-1].date)}</span></div>`:dbMsg('No detection or anonymization activity in this period.')}</div>
+<div class="card"><h3>Risk distribution <span>objects</span></h3>${rt?risk.map(r=>`<div style="margin:11px 0"><div class="row"><span>${r.level}</span><b>${fmtN(r.objects)} <span class="mu" style="font-weight:400">· ${Math.round(r.objects/rt*100)}%</span></b></div>${bar(Math.round(r.objects/rt*100),r.level=='Critical'?'var(--cr)':r.level=='High'?'var(--hi)':r.level=='Medium'?'var(--wa)':'var(--ok)')}</div>`).join('')+`<div class="mu" style="font-size:12px">${esc(d.risk_basis)}</div>`:dbMsg('No objects with PII yet.')}</div>
+<div class="card"><h3>Protection coverage by bucket</h3>${cov.length?cov.map(c=>`<div style="margin:11px 0"><div class="row"><span class="mono">${esc(c.bucket)}</span><b>${pct(c.protected_pct)} <span class="mu" style="font-weight:400">· ${fmtN(c.protected)} / ${fmtN(c.objects_with_pii)} protected${c.partial?' · '+fmtN(c.partial)+' partial':''}${c.unprotected?' · '+fmtN(c.unprotected)+' unprotected':''}</span></b></div>${bar(c.protected_pct||0)}</div>`).join('')+`<div class="mu" style="font-size:12px">${esc(d.protection_basis)}${d.assigned_policies.length?'':' No policy is assigned to any user.'}</div>`:dbMsg('No buckets with PII yet.')}</div>
+<div class="card"><h3>Anonymization by operator</h3>${an.by_operator.length?dbDonut(an.by_operator.map(x=>[nice(x.name),x.count]),['#1f4d3a','#b3261e','#8fae9c','#c9a24a','#5b6b7a']):dbMsg('No anonymization recorded yet.')}</div>
+<div class="card"><h3>PII by region</h3>${d.region_distribution.length?d.region_distribution.map(r=>{const t=d.region_distribution.reduce((a,b)=>a+b.count,0);return`<div style="margin:11px 0"><div class="row"><span>${esc(r.region)}</span><b>${fmtN(r.count)} <span class="mu" style="font-weight:400">· ${Math.round(r.count/t*100)}%</span></b></div>${bar(Math.round(r.count/t*100))}</div>`}).join(''):dbMsg('No PII detected yet.')}</div></div>`};
+
+/* ---------- Audit Logs (admin) ---------- */
+const EV_LABEL={upload:'Upload',detection:'PII Detection',anonymization:'Anonymization',download:'Download',delete:'Delete',login:'Sign-in',policy_change:'Policy Change',access_denied:'Access Denied',audit_export:'Audit Export'};
+V.audit=()=>{if(!canSee('audit'))return denied('Audit Logs');const hd=head('Audit Logs','Append-only record of storage, privacy, sign-in and policy events (no PII values are stored)',stamp(['audit'])+`<button class="btn g" onclick="auExport()">Export CSV</button>`),w=xs(['audit']);if(w)return hd+w;const d=X.audit.data;
+ const chips=[['','All'],...d.event_types.map(t=>[t.event_type,(EV_LABEL[t.event_type]||t.event_type)+' · '+fmtN(t.count)])];
+ const from=d.total?d.offset+1:0,to=d.offset+d.items.length;
+ return hd+`<div class="chips">${chips.map(c=>`<span class="chip ${c[0]==AU.f?'on':''}" onclick="auSet('${c[0]}')">${esc(c[1])}</span>`).join('')}</div>
+<div class="card"><div class="row" style="margin-bottom:12px"><input id="auq" placeholder="Search user, bucket or object…" value="${qa(AU.q)}" style="width:300px;max-width:100%" onkeydown="if(event.key=='Enter')auSearch(this.value)"><span class="mu">${fmtN(d.total)} event${d.total==1?'':'s'}${d.total?' · showing '+fmtN(from)+'–'+fmtN(to):''}</span></div>
+${d.items.length?actTbl(d.items):dbMsg('No audit events match.')}
+<div class="row" style="margin-top:14px;justify-content:flex-start"><button class="btn g" ${d.offset?'':'disabled'} onclick="auPage(-1)">← Newer</button><button class="btn g" ${to<d.total?'':'disabled'} onclick="auPage(1)">Older →</button></div></div>`};
+function auSet(t){AU.f=t;AU.off=0;xLoad('audit')}
+function auSearch(v){AU.q=v.trim();AU.off=0;xLoad('audit')}
+function auPage(n){AU.off=Math.max(0,AU.off+n*AU.limit);xLoad('audit')}
+async function auExport(){try{const r=await api('/api/admin/audit-logs/export'+(AU.f||AU.q?'?'+(AU.f?'event_type='+encodeURIComponent(AU.f)+'&':'')+(AU.q?'q='+encodeURIComponent(AU.q):''):''));
+ if(!r.ok){alert('Export failed: '+await errMsg(r));return}const b=await r.blob(),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='audit-logs.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);refreshPage()}
+ catch(e){alert('Export failed: '+e.message)}}
+=======
 dash(){return dashView()},
 store(){const bs=['All',...new Set(OBJ.map(o=>o[1]))];const rows=OBJ.map((o,i)=>[o,i]).filter(([o])=>(bk=='All'||o[1]==bk)&&o[0].includes(q));
 return head('Object Storage','Buckets and objects with live scan status',`<button class="btn" onclick="alert('Upload goes through the S3 proxy; scanning starts on PUT event.')">Upload</button>`)+`
@@ -122,6 +189,7 @@ sec(){return head('Security Overview','Overall protection posture')+`<div class=
 <div class="grid g2" style="margin-top:16px"><div class="card"><h3>Critical findings</h3>${[['Unencrypted card numbers in finance-raw','Critical'],['Username policy disabled','High'],['ml_training_set.csv not yet scanned','Medium']].map(f=>`<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>${f[0]}</span>${pill(f[1])}</div>`).join('')}</div>
 <div class="card"><h3>High-risk objects</h3>${OBJ.filter(o=>o[6]=='Critical'||o[6]=='High').map(o=>`<div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><span><b>${o[0]}</b> <span class="mu">${o[1]}</span></span>${pill(o[7])}</div>`).join('')}</div></div>
 <div class="card" style="margin-top:16px"><h3>Recent security events</h3>${logTbl(LOG.filter(l=>['Denied','Warn','Critical','Partial'].includes(l[4])))}</div>`}};
+>>>>>>> origin/main
 /* ---------- LLM Playground: Ollama llama3.2 via /api/llm/chat (PII is detected + protected server-side) ---------- */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms)),esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const LLM={cfg:{endpoint:'/api/llm/chat'}, // recommended: your proxy-server forwards to the provider so API keys stay server-side
@@ -132,14 +200,14 @@ providers:{
   return{content:j.message.content,guard:j.pii_guard}}}}};
 const seg=(t,items,f)=>{let p=0,s='';items.forEach(i=>{s+=esc(t.slice(p,i.s))+f(i);p=i.e});return s+esc(t.slice(p))};
 const L={model:'llama3.2',msgs:[],sent:[],run:null,busy:0,draft:''};
-const SAMPLES=["Draft a reply to Priya Raman (priya.raman@acme.in, +91 98765 43210) about the failed payment on card 4532 8891 0023 7714.","Customer Daniel Costa at 42 Residency Road reported a login from 10.24.8.17. Summarise the incident."];
+const SAMPLES=["Draft a reply to Priya Raman (priya.raman@acme.in, +91 98765 43210) about the failed payment on card 4532 8891 0023 7714.","Customer Daniel Costa at 42 Residency Road reported a login from 10.24.8.17. Summarise the incident.","Verify KYC: Anita Rao, Aadhaar 2345 6789 0124, mobile +91 98765 43210, Flat 402, Sunrise Apartments, MG Road, Bengaluru 560001. US contact: SSN 123-45-6789, 350 Fifth Avenue, New York, NY 10118."];
 async function runPipeline(text){
  const res=await LLM.providers.ollama.chat({model:L.model,messages:[...L.sent,{role:'user',content:text}]}),g=res.guard;
   L.sent.push({role:'user',content:g.protected_prompt},{role:'assistant',content:res.content});
-  const items=g.entities.map(e=>({s:e.start,e:e.end,v:e.value,t:e.entity_type,c:Math.round(e.score*100),act:e.operator_name,src:e.policy_source,out:Object.entries(e.operator_params).map(([k,v])=>k+'='+v).join(', ')||'(none)'}));
+  const items=g.entities.map(e=>({s:e.start,e:e.end,v:text.slice(e.start,e.end),t:e.entity_type,c:Math.round(e.score*100),act:e.operator_name,src:e.policy_source,out:Object.entries(e.operator_params).map(([k,v])=>k+'='+v).join(', ')||'(none)'}));
   return{text,prot:g.protected_prompt,items,payload:g.ollama_request,response:res.content,model:g.model_used,server:g}}
 async function send(){const t=L.draft.trim();if(!t||L.busy)return;L.busy=1;L.msgs.push({role:'user',text:t});L.draft='';rl();
- try{const r=await runPipeline(t);L.run=r;L.msgs.push({role:'assistant',text:r.response})}catch(e){L.msgs.push({role:'assistant',text:'Error: '+e.message})}L.busy=0;rl()}
+ try{const r=await runPipeline(t);L.run=r;L.msgs.push({role:'assistant',text:r.response})}catch(e){L.msgs.push({role:'assistant',text:'Error: '+e.message})}L.busy=0;rl();refreshAll()}
 function rl(){go();const c=$('.chat');if(c)c.scrollTop=1e9;const t=$('#pr');if(t&&!L.busy)t.focus()}
 V.llm=()=>{const r=L.run,ap=r&&r.server?[...new Map(r.items.filter(i=>i.act!='None').map(i=>[i.t,i])).values()]:[];
 const active=L.busy?(L.msgs.length?3:0):-1;
@@ -167,7 +235,7 @@ ${r.server?`<div class="card" style="margin-top:30px"><h3>Applied policy <span>u
 
 /* ---------- Policy Engine: /api/policies and /api/users (admin only; enforced by the server) ---------- */
 const PE={loaded:0,loading:0,policies:[],users:[],ed:null,err:'',ok:''};
-const OPS=['mask','redact','replace','hash'],ENT=['PERSON','EMAIL_ADDRESS','PHONE_NUMBER','CREDIT_CARD','US_SSN','US_BANK_NUMBER','IP_ADDRESS','LOCATION','DATE_TIME','URL','IBAN_CODE','US_DRIVER_LICENSE','US_PASSPORT','MEDICAL_LICENSE','CRYPTO','NRP'];
+const OPS=['mask','redact','replace','hash'],ENT=['PERSON','EMAIL_ADDRESS','PHONE_NUMBER','CREDIT_CARD','US_SSN','US_BANK_NUMBER','IP_ADDRESS','LOCATION','DATE_TIME','URL','IN_AADHAAR','IN_PIN_CODE','IN_ADDRESS','US_ADDRESS','US_ZIP_CODE','IBAN_CODE','US_DRIVER_LICENSE','US_PASSPORT','MEDICAL_LICENSE','CRYPTO','NRP'];
 const qa=s=>esc(s).replace(/"/g,'&quot;');
 const errMsg=async r=>{const j=await r.json().catch(()=>({})),d=j.detail;return Array.isArray(d)?d.map(x=>String(x.msg).replace(/^Value error, /,'')).join(' · '):(d||'HTTP '+r.status)};
 const defParams=o=>o=='mask'?{chars_to_mask:'10',masking_char:'*',from_end:false}:o=='replace'?{new_value:''}:o=='hash'?{hash_type:'sha256'}:{};
@@ -178,7 +246,7 @@ async function peLoad(){PE.loading=1;
  PE.loaded=1;PE.loading=0;go()}
 async function peCall(method,url,body,okMsg){PE.err=PE.ok='';
  try{const r=await api(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(r.status==401)return false;
-  if(!r.ok){PE.err=await errMsg(r);go();return false}PE.ok=okMsg;await peLoad();return true}
+  if(!r.ok){PE.err=await errMsg(r);go();return false}PE.ok=okMsg;await peLoad();refreshAll();return true}
  catch(e){PE.err='Request failed: '+e.message;go();return false}}
 function peNew(){PE.err=PE.ok='';PE.ed={isNew:true,name:'',rules:[{entity_type:'PERSON',operator_name:'replace',operator_params:defParams('replace')}]};go()}
 function peEdit(i){const p=PE.policies[i];PE.err=PE.ok='';PE.ed={isNew:false,name:p.policy_name,rules:JSON.parse(JSON.stringify(p.rules))};go()}
@@ -228,6 +296,15 @@ async function dbLoad(){if(D.loading)return;D.loading=1;if(page=='dash')dbPaint(
   if(!r.ok)return{err:await errMsg(r)};const j=await r.json();return{data:j.data,at:j.generated_at}}catch(e){return{err:'Cannot reach the server ('+e.message+')'}}}));
  D.loading=0;if(!AUTH.token)return;DB_EPS.forEach((ep,i)=>{if(res[i])D.r[ep]=res[i]});D.at=new Date();if(page=='dash')dbPaint()}
 function dbPaint(){const m=$('#m'),st=m?m.scrollTop:0;go();if(m)m.scrollTop=st}
+<<<<<<< HEAD
+function dbAuto(){if(D.timer)return;D.timer=setInterval(()=>tick(),15000)} // one 15s refresh for whichever data page is open
+const dbMsg=(t,cls='mu')=>`<div class="${cls}" style="padding:10px 0">${t}</div>`;
+function dbSec(ep,fn){const x=D.r[ep];if(!x)return dbMsg('Loading…');if(x.err)return dbMsg('Unavailable: '+esc(x.err),'mu');return fn(x.data)}
+function actTbl(items){const ev=EV_LABEL;
+ const res={ok:['Completed','OK'],failed:['Unprotected','Failed'],original:['Pending','Original']};
+ return `<div class="tw"><table><tr><th>Time</th><th>User</th><th>Event</th><th>Detail</th><th>Result</th></tr>${items.map(i=>{const r=res[i.status]||['Inactive',i.status];
+  const where=i.source=='llm_prompt'?'LLM prompt':esc((i.bucket||'')+(i.object_key?'/'+i.object_key:''))||(i.event_type=='login'?'authentication':i.event_type=='policy_change'?'policy engine':'—');
+=======
 function dbAuto(){clearInterval(D.timer);D.timer=setInterval(()=>{if(page=='dash'&&AUTH.token&&!document.hidden)dbLoad()},30000)}
 const dbMsg=(t,cls='mu')=>`<div class="${cls}" style="padding:10px 0">${t}</div>`;
 function dbSec(ep,fn){const x=D.r[ep];if(!x)return dbMsg('Loading…');if(x.err)return dbMsg('Unavailable: '+esc(x.err),'mu');return fn(x.data)}
@@ -235,6 +312,7 @@ function actTbl(items){const ev={upload:'Upload',detection:'PII Detection',anony
  const res={ok:['Completed','OK'],failed:['Unprotected','Failed'],original:['Pending','Original']};
  return `<div class="tw"><table><tr><th>Time</th><th>User</th><th>Event</th><th>Detail</th><th>Result</th></tr>${items.map(i=>{const r=res[i.status]||['Inactive',i.status];
   const where=i.source=='llm_prompt'?'LLM prompt':esc((i.bucket||'')+(i.object_key?'/'+i.object_key:''));
+>>>>>>> origin/main
   return `<tr><td class="mono mu" style="white-space:nowrap">${fmtT(i.timestamp)}</td><td>${esc(i.actor||(i.event_type=='detection'?'pii-analyzer':'system'))}</td><td><b>${ev[i.event_type]||esc(i.event_type)}</b></td><td><span class="mono">${where}</span><div class="mu" style="font-size:12px">${esc(i.summary)}</div></td><td><span class="pill ${r[0]}">${esc(r[1])}</span></td></tr>`}).join('')}</table></div>`}
 function dbDonut(rows,cols){if(rows.length>cols.length){const k=cols.length-1;rows=[...rows.slice(0,k),['Other',rows.slice(k).reduce((a,b)=>a+b[1],0)]]}return donut(rows,cols)}
 function dbTimeline(t){const v=t.map(x=>x.entities_detected),runs=t.reduce((a,x)=>a+x.detection_runs,0),fails=t.reduce((a,x)=>a+x.failed_runs,0);
@@ -273,7 +351,11 @@ function dashView(){if(!D.at&&!D.loading)setTimeout(dbLoad);if(!D.timer)dbAuto()
 const AUTH={token:null,user:null,role:null,exp:0};
 try{const a=JSON.parse(sessionStorage.getItem('pii_auth')||'null');if(a&&a.token&&a.exp>Date.now())Object.assign(AUTH,a)}catch(e){}
 function showLogin(msg){$('#login').hidden=false;$('#lerr').textContent=msg||'';$('#lu').focus()}
+<<<<<<< HEAD
+function logout(msg){AUTH.token=AUTH.user=AUTH.role=null;AUTH.exp=0;try{sessionStorage.removeItem('pii_auth')}catch(e){}L.msgs=[];L.sent=[];L.run=null;L.draft='';PE.loaded=0;PE.ed=null;PE.err=PE.ok='';D.r={};D.at=null;Object.keys(X).forEach(k=>delete X[k]);Object.assign(AU,{f:'',q:'',off:0});clearInterval(D.timer);D.timer=null;showLogin(msg)}
+=======
 function logout(msg){AUTH.token=AUTH.user=AUTH.role=null;AUTH.exp=0;try{sessionStorage.removeItem('pii_auth')}catch(e){}L.msgs=[];L.sent=[];L.run=null;L.draft='';PE.loaded=0;PE.ed=null;PE.err=PE.ok='';D.r={};D.at=null;clearInterval(D.timer);D.timer=null;showLogin(msg)}
+>>>>>>> origin/main
 async function api(url,opt={}){const r=await fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:'Bearer '+AUTH.token}});if(r.status==401)logout('Your session has expired. Please sign in again.');return r}
 async function doLogin(ev){ev.preventDefault();const b=$('#lb');b.disabled=true;$('#lerr').textContent='';
  try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('#lu').value.trim(),password:$('#lp').value})});
@@ -281,10 +363,17 @@ async function doLogin(ev){ev.preventDefault();const b=$('#lb');b.disabled=true;
   if(!r.ok){$('#lerr').textContent=r.status==401?'Invalid username or password.':(typeof j.detail=='string'?j.detail:'Sign-in failed (HTTP '+r.status+').');return}
   Object.assign(AUTH,{token:j.access_token,user:j.user.username,role:j.user.role,exp:Date.now()+j.expires_in*1000});
   try{sessionStorage.setItem('pii_auth',JSON.stringify(AUTH))}catch(e){}
-  $('#lp').value='';$('#login').hidden=true;go()}
+  $('#lp').value='';$('#login').hidden=true;dbAuto();go();enter()}
  catch(e){$('#lerr').textContent='Cannot reach the server.'}finally{b.disabled=false}}
 function nav(p){if(p=='policy')PE.loaded=0;if(p=='dash'&&D.at)setTimeout(dbLoad);location.hash=p}
+<<<<<<< HEAD
+function go(){if(!AUTH.token){showLogin();return}if(!V[page]||!canSee(page))page='dash';
+ $('#m').innerHTML=V[page]();$('#nav').innerHTML=PAGES.filter(p=>canSee(p[0])).map((p,i)=>`<a class="${p[0]==page?'on':''}" onclick="nav('${p[0]}')"><span>${String(i+1).padStart(2,'0')}</span>${p[2]}</a>`).join('')}
+addEventListener('hashchange',()=>{page=location.hash.slice(1)||'dash';if(!V[page]||!canSee(page)){page='dash';location.hash='dash'}go();$('#m').scrollTop=0;enter()});
+if(!V[page]||!canSee(page))page='dash';go();if(AUTH.token){dbAuto();enter()}
+=======
 function go(keep){if(!AUTH.token){showLogin();return}const ph=$('#q'),pos=ph?ph.selectionStart:0;$('#m').innerHTML=V[page]();$('#nav').innerHTML=PAGES.map((p,i)=>`<a class="${p[0]==page?'on':''}" onclick="nav('${p[0]}')"><span>${String(i+1).padStart(2,'0')}</span>${p[2]}</a>`).join('');if(keep){const n=$('#q');n.focus();n.setSelectionRange(pos,pos)}else $('#m').scrollTop=0}
 addEventListener('hashchange',()=>{page=location.hash.slice(1)||'dash';if(!V[page])page='dash';go()});
 if(!V[page])page='dash';go();
+>>>>>>> origin/main
 </script></body></html>

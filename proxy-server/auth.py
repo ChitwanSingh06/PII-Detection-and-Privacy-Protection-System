@@ -6,7 +6,11 @@
 """
 from dataclasses import dataclass
 
+<<<<<<< HEAD
+from fastapi import APIRouter, Depends, HTTPException, Request
+=======
 from fastapi import APIRouter, Depends, HTTPException
+>>>>>>> origin/main
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -61,6 +65,31 @@ def require_role(user: AuthUser, *allowed_roles: str) -> AuthUser:
     return user
 
 
+<<<<<<< HEAD
+async def _audit(event_type: str, **kwargs) -> None:
+    """Best-effort audit write. Imported lazily (dashboard imports this module). Never stores PII."""
+    try:
+        from dashboard import record_event
+        await record_event(event_type, **kwargs)
+    except Exception:  # noqa: BLE001 - auditing must never break authentication
+        pass
+
+
+async def require_admin(
+    request: Request, user: AuthUser = Depends(get_current_user)
+) -> AuthUser:
+    """FastAPI dependency for admin-only APIs. A denied attempt is written to the audit log (who + which route)."""
+    if user.role != "admin":
+        await _audit(
+            "access_denied", status="failed", actor=user.username,
+            details={"method": request.method, "route": request.scope.get("route").path
+                     if request.scope.get("route") else "unknown", "required_role": "admin"},
+        )
+    return require_role(user, "admin")
+
+
+=======
+>>>>>>> origin/main
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=64)
     password: str = Field(..., min_length=1, max_length=128)
@@ -80,6 +109,19 @@ async def login(body: LoginRequest):
         )
 
     # Same generic error for unknown user, wrong password, or an account with no password set.
+<<<<<<< HEAD
+    # Audit: the attempted name is only recorded when it is a real account (a mistyped value could be personal data).
+    if row is None or not row.password_hash:
+        burn_password_check(body.password)
+        await _audit("login", status="failed", actor=None, details={"reason": "invalid_credentials"})
+        raise _unauthorized("Invalid username or password")
+    if not verify_password(body.password, row.password_hash):
+        await _audit("login", status="failed", actor=body.username, details={"reason": "invalid_credentials"})
+        raise _unauthorized("Invalid username or password")
+
+    token, expires_in = create_access_token(body.username, row.role)
+    await _audit("login", actor=body.username, details={"role": row.role})
+=======
     if row is None or not row.password_hash:
         burn_password_check(body.password)
         raise _unauthorized("Invalid username or password")
@@ -87,6 +129,7 @@ async def login(body: LoginRequest):
         raise _unauthorized("Invalid username or password")
 
     token, expires_in = create_access_token(body.username, row.role)
+>>>>>>> origin/main
     return {
         "access_token": token,
         "token_type": "bearer",

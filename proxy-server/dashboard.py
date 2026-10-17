@@ -39,7 +39,14 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 LLM_SCRATCH_BUCKET = "__llm_playground__"  # temporary span rows written by the LLM Playground; never counted
+<<<<<<< HEAD
+# upload/detection/anonymization/download/delete feed the dashboard metrics; login/policy_change/access_denied are
+# audit-only events (they never enter the metrics because every metric query filters on its own event types).
+EVENT_TYPES = ("upload", "detection", "anonymization", "download", "delete", "login", "policy_change", "access_denied",
+               "audit_export")
+=======
 EVENT_TYPES = ("upload", "detection", "anonymization", "download", "delete")
+>>>>>>> origin/main
 
 # --------------------------------------------------------------------------------------------------
 # Persistence (additive, backward compatible: CREATE ... IF NOT EXISTS, nothing is dropped or reset)
@@ -49,7 +56,11 @@ SCHEMA_SQL = (
     CREATE TABLE IF NOT EXISTS dashboard_events (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at   TEXT    NOT NULL,              -- UTC, ISO-8601 'YYYY-MM-DDTHH:MM:SS.ffffffZ'
+<<<<<<< HEAD
+        event_type   TEXT    NOT NULL,              -- upload | detection | anonymization | download | delete | login | policy_change | access_denied | audit_export
+=======
         event_type   TEXT    NOT NULL,              -- upload | detection | anonymization | download | delete
+>>>>>>> origin/main
         source       TEXT    NOT NULL DEFAULT 'object',  -- object | llm_prompt
         actor        TEXT,                          -- username from the verified JWT
         bucket_name  TEXT,
@@ -143,14 +154,27 @@ async def record_event(
 _keep_engine = None
 
 
+<<<<<<< HEAD
+def _applied_entity_types(content: str, entities: list[dict], rule_types: Optional[set] = None) -> list[str]:
+=======
 def _applied_entity_types(content: str, entities: list[dict]) -> list[str]:
+>>>>>>> origin/main
     """Entity types Presidio's AnonymizerEngine actually operates on for these spans.
 
     Presidio resolves overlaps itself (merges same-type overlaps, drops any span CONTAINED in another
     span regardless of score, merges whitespace-adjacent same-type spans), so counting raw spans would
     over-report. Running its public anonymize() with 'keep' for everything returns exactly the surviving
     items without changing any text; the real transformation stays in the anonymizer service.
+<<<<<<< HEAD
+
+    With `rule_types` only spans of types that have a policy rule are considered, exactly like the anonymizer
+    service (a span without a rule cannot swallow one that has a rule).
     """
+    if rule_types is not None:
+        entities = [e for e in entities if e["type"] in rule_types]
+=======
+    """
+>>>>>>> origin/main
     global _keep_engine
     from presidio_anonymizer import AnonymizerEngine
     from presidio_anonymizer.entities import OperatorConfig, RecognizerResult
@@ -169,7 +193,11 @@ def anonymization_breakdown(content: str, entities: list[dict], policy_rules: li
     """Entities a policy rule was applied to (after Presidio's conflict resolution), by type and operator."""
     rules = {r["entity_type"]: r["operator_name"] for r in policy_rules if r.get("entity_type")}
     try:
+<<<<<<< HEAD
+        hit = [t for t in _applied_entity_types(content, entities, set(rules)) if t in rules] if entities else []
+=======
         hit = [t for t in _applied_entity_types(content, entities) if t in rules] if entities else []
+>>>>>>> origin/main
     except Exception as exc:  # noqa: BLE001 - metrics must never break the request
         log.warning("dashboard: could not count anonymized entities: %s", exc)
         return {"entity_count": 0, "by_entity_type": {}, "by_operator": {}, "count_unavailable": True}
@@ -194,7 +222,15 @@ def prompt_breakdown(content: str, entities: list[dict], policy_rules: list[dict
     except Exception as exc:  # noqa: BLE001 - metrics must never break the request
         log.warning("dashboard: could not resolve overlapping entities for a prompt: %s", exc)
         surviving, unavailable = [e["type"] for e in entities], True  # raw span count is the best remaining figure
+<<<<<<< HEAD
+    try:  # the subset a rule was applied to is resolved policy-aware, like the anonymizer does
+        hit = [t for t in _applied_entity_types(content, entities, set(rules)) if t in rules] if entities else []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("dashboard: could not resolve policy-covered entities for a prompt: %s", exc)
+        hit, unavailable = [t for t in surviving if t in rules], True
+=======
     hit = [t for t in surviving if t in rules]
+>>>>>>> origin/main
     out = {
         "entity_count": len(hit),
         "by_entity_type": dict(Counter(hit)),
@@ -763,11 +799,38 @@ def _summary_text(event_type: str, status: str, n: int, details: dict) -> str:
         return "No policy assigned; original returned"
     if event_type == "delete":
         return "Object and PII metadata removed"
+<<<<<<< HEAD
+    if event_type == "login":
+        return "Signed in" if status == "ok" else "Sign-in failed"
+    if event_type == "policy_change":
+        what = details.get("action", "changed") if isinstance(details, dict) else "changed"
+        name = details.get("policy_name") if isinstance(details, dict) else None
+        who = details.get("user_name") if isinstance(details, dict) else None
+        return f"Policy {name or '(none)'} {what}" + (f" for {who}" if who else "")
+    if event_type == "access_denied":
+        return "Admin-only API refused (role is not admin)"
+    if event_type == "audit_export":
+        return "Audit log exported to CSV"
+=======
+>>>>>>> origin/main
     return event_type
 
 
 @router.get("/activity", response_model=ActivityResponse)
 async def activity(
+<<<<<<< HEAD
+    user: AuthUser = Depends(get_current_user), limit: int = Query(10, ge=1, le=100)
+):
+    """Recent activity. Admins see everything; any other user only sees events they caused (the full,
+    filterable record is the admin-only Audit Logs API)."""
+    scope = "" if user.role == "admin" else "WHERE actor = :me "
+    params = {} if user.role == "admin" else {"me": user.username}
+    rows = await _fetch(
+        "SELECT id, created_at, event_type, source, actor, bucket_name, object_key, status, entity_count, details "
+        f"FROM dashboard_events {scope}ORDER BY id DESC LIMIT :n", {**params, "n": limit},
+    )
+    total = await _fetch(f"SELECT COUNT(*) AS n FROM dashboard_events {scope}", params)
+=======
     _: AuthUser = Depends(get_current_user), limit: int = Query(10, ge=1, le=100)
 ):
     rows = await _fetch(
@@ -775,6 +838,7 @@ async def activity(
         "FROM dashboard_events ORDER BY id DESC LIMIT :n", {"n": limit},
     )
     total = await _fetch("SELECT COUNT(*) AS n FROM dashboard_events")
+>>>>>>> origin/main
     items = []
     for r in rows:
         try:

@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+import argparse
+=======
+>>>>>>> origin/main
 import json
 import sqlite3
 import sys
@@ -71,6 +75,32 @@ USER2_POLICY = [
     },
 ]
 
+<<<<<<< HEAD
+# Rules for the Indian + US categories (Aadhaar, PIN, addresses, ZIP). They are NOT part of the default seed, so
+# existing/seeded policies stay exactly as they were. Opt in with
+#   python database/init_db.py --add-new-category-rules
+# which is additive: a type that already has a rule keeps it, and nothing is modified or deleted.
+NEW_CATEGORY_RULES = {
+    "user1_policy": [
+        {"entity_type": "IN_AADHAAR", "operator_name": "replace", "operator_params": {"new_value": "<AADHAAR>"}},
+        {"entity_type": "IN_PIN_CODE", "operator_name": "replace", "operator_params": {"new_value": "<PIN_CODE>"}},
+        {"entity_type": "IN_ADDRESS", "operator_name": "replace", "operator_params": {"new_value": "<ADDRESS>"}},
+        {"entity_type": "US_ADDRESS", "operator_name": "replace", "operator_params": {"new_value": "<ADDRESS>"}},
+        {"entity_type": "US_ZIP_CODE", "operator_name": "replace", "operator_params": {"new_value": "<ZIP_CODE>"}},
+    ],
+    "user2_policy": [
+        {"entity_type": "IN_AADHAAR", "operator_name": "redact", "operator_params": {}},
+        {"entity_type": "IN_PIN_CODE", "operator_name": "mask",
+         "operator_params": {"from_end": False, "masking_char": "*", "chars_to_mask": 100}},
+        {"entity_type": "IN_ADDRESS", "operator_name": "redact", "operator_params": {}},
+        {"entity_type": "US_ADDRESS", "operator_name": "redact", "operator_params": {}},
+        {"entity_type": "US_ZIP_CODE", "operator_name": "mask",
+         "operator_params": {"from_end": False, "masking_char": "*", "chars_to_mask": 100}},
+    ],
+}
+
+=======
+>>>>>>> origin/main
 # Demo accounts for local testing ONLY. Change or remove them before any real use.
 # (user_name, role, policy_name, password). Admin has no policy, so GETs return the original file.
 DEMO_USERS = [
@@ -89,7 +119,35 @@ def ensure_auth_columns(cur):
         cur.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
 
 
+<<<<<<< HEAD
+def add_new_category_rules(cur):
+    """Additive upgrade for existing databases: give the demo policies rules for the new categories.
+
+    Only policies that already exist are touched, only entity types that have NO rule yet are added, and no
+    existing row is modified or deleted. Returns the list of (policy_name, entity_type) added.
+    """
+    added = []
+    for policy_name, rules in NEW_CATEGORY_RULES.items():
+        rows = cur.execute("SELECT policy FROM policies WHERE policy_name = ?", (policy_name,)).fetchall()
+        if not rows:
+            continue
+        have = {json.loads(r[0]).get("entity_type") for r in rows}
+        for rule in rules:
+            if rule["entity_type"] not in have:
+                cur.execute("INSERT INTO policies (policy_name, policy) VALUES (?, ?)", (policy_name, json.dumps(rule)))
+                added.append((policy_name, rule["entity_type"]))
+    return added
+
+
+def create_tables(reset_demo: bool = False, upgrade_policies: bool = False):
+    """Create missing tables/columns and seed demo data WITHOUT touching existing rows.
+
+    reset_demo=True restores the old behaviour (wipes users and policies, then re-seeds the demo data) and is
+    only ever used when explicitly requested with --reset-demo.
+    """
+=======
 def create_tables():
+>>>>>>> origin/main
     db_path = Path(SQLITE_PATH)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -158,6 +216,34 @@ def create_tables():
         "ON dashboard_events (request_id, event_type) WHERE request_id IS NOT NULL"
     )
 
+<<<<<<< HEAD
+    if reset_demo:
+        cur.execute("DELETE FROM users")
+        cur.execute("DELETE FROM policies")
+
+    # Demo users: only the ones that do not exist yet (a password or policy assignment you changed is kept).
+    existing_users = {r[0] for r in cur.execute("SELECT user_name FROM users")}
+    seeded_users = []
+    for user_name, role, policy_name, password in DEMO_USERS:
+        if user_name not in existing_users:
+            cur.execute(
+                "INSERT INTO users (user_name, policy_name, password_hash, role) VALUES (?, ?, ?, ?)",
+                (user_name, policy_name, hash_password(password), role),
+            )
+            seeded_users.append(user_name)
+
+    # Demo policies: only when a policy of that name does not exist yet (an existing one is left as it is).
+    existing_policies = {r[0] for r in cur.execute("SELECT DISTINCT policy_name FROM policies")}
+    seeded_policies = []
+    for name, rules in (("user1_policy", USER1_POLICY), ("user2_policy", USER2_POLICY)):
+        if name in existing_policies:
+            continue
+        for rule in rules:
+            cur.execute("INSERT INTO policies (policy_name, policy) VALUES (?, ?)", (name, json.dumps(rule)))
+        seeded_policies.append(name)
+
+    added = add_new_category_rules(cur) if upgrade_policies else []
+=======
     cur.execute("DELETE FROM users")
     cur.execute("DELETE FROM policies")
 
@@ -177,12 +263,35 @@ def create_tables():
             "INSERT INTO policies (policy_name, policy) VALUES (?, ?)",
             ("user2_policy", json.dumps(rule)),
         )
+>>>>>>> origin/main
 
     conn.commit()
     cur.close()
     conn.close()
+<<<<<<< HEAD
+    print(f"SQLite database ready at {db_path}")
+    print(f"  demo users added:    {', '.join(seeded_users) or 'none (existing users kept)'}")
+    print(f"  demo policies added: {', '.join(seeded_policies) or 'none (existing policies kept)'}")
+    if upgrade_policies:
+        print(f"  new-category rules added: {len(added)}" + "".join(f"\n    {p}: {t}" for p, t in added))
+    elif not seeded_policies:
+        print("  tip: run with --add-new-category-rules to add Aadhaar / PIN / address / ZIP rules to the demo policies")
+    if reset_demo:
+        print("  --reset-demo was given: users and policies were reset to the demo data")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Create/upgrade the SQLite schema. Never deletes data by default.")
+    parser.add_argument("--add-new-category-rules", action="store_true",
+                        help="add rules for Aadhaar, PIN, addresses and ZIP to the existing demo policies (additive)")
+    parser.add_argument("--reset-demo", action="store_true",
+                        help="DESTRUCTIVE: wipe users and policies and re-seed the demo data")
+    args = parser.parse_args()
+    create_tables(reset_demo=args.reset_demo, upgrade_policies=args.add_new_category_rules)
+=======
     print(f"SQLite tables created; demo users (admin, user1, user2) and sample policies seeded at {db_path}")
 
 
 if __name__ == "__main__":
     create_tables()
+>>>>>>> origin/main

@@ -34,6 +34,10 @@ from config import AN_SVC_URL, SQLITE_PATH, STORAGE_ROOT  # noqa: E402
 from sqlite_db import SqliteModel  # noqa: E402
 from auth import AuthUser, get_current_user, require_role, router as auth_router  # noqa: E402
 from policies import router as policies_router  # noqa: E402
+<<<<<<< HEAD
+from admin_api import router as admin_router  # noqa: E402
+=======
+>>>>>>> origin/main
 from dashboard import (  # noqa: E402
     anonymization_breakdown,
     ensure_schema as ensure_dashboard_schema,
@@ -60,6 +64,11 @@ app.include_router(auth_router)
 app.include_router(policies_router)
 # Live Dashboard (read-only metrics): /api/dashboard/*. Also before the catch-all.
 app.include_router(dashboard_router)
+<<<<<<< HEAD
+# Admin-only pages' APIs (PII Detection, Analytics, Audit Logs): /api/admin/*. Also before the catch-all.
+app.include_router(admin_router)
+=======
+>>>>>>> origin/main
 
 # --- Frontend UI -------------------------------------------------------------
 # Registered BEFORE the catch-all proxy route below so /ui/ is never treated as
@@ -264,7 +273,15 @@ LLM_SCRATCH_BUCKET = "__llm_playground__"  # only holds span offsets, never prom
 # an LLM, so these types (the ones the seeded policies already cover, plus IP) are replaced instead.
 # These defaults are never applied to an admin: an admin's effective policy is what the Policy Engine shows.
 # Set LLM_STRICT_PII=1 to also replace every other detected type that has no rule (regular users only).
+<<<<<<< HEAD
+DEFAULT_PII_TYPES = {
+    "PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "US_SSN", "US_BANK_NUMBER", "IP_ADDRESS",
+    # Indian + US categories (fail-safe for a regular user with no policy)
+    "IN_AADHAAR", "IN_PIN_CODE", "IN_ADDRESS", "US_ADDRESS", "US_ZIP_CODE",
+}
+=======
 DEFAULT_PII_TYPES = {"PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "US_SSN", "US_BANK_NUMBER", "IP_ADDRESS"}
+>>>>>>> origin/main
 LLM_STRICT_PII = os.environ.get("LLM_STRICT_PII", "0") == "1"
 
 
@@ -349,7 +366,9 @@ def _describe(content: str, entities: list[dict], rules: dict) -> list[dict]:
         rule = rules.get(e["type"])
         out.append({
             "entity_type": e["type"],
-            "value": content[e["start"]:e["end"]],  # for the demo UI only
+            # The matched text is NOT returned (no raw PII in API responses). The caller already has its own
+            # prompt and highlights it with start/end; `length` is only a size hint.
+            "length": e["end"] - e["start"],
             "start": e["start"],
             "end": e["end"],
             "score": e["score"],
@@ -556,6 +575,11 @@ async def proxy_handler(
     current_user: AuthUser = Depends(get_current_user),  # every object route needs a valid JWT
 ):
     if request.method in ("PUT", "POST", "DELETE") and path:
+        if current_user.role != "admin":
+            await record_event(
+                "access_denied", status="failed", actor=current_user.username,
+                details={"method": request.method, "route": "/{bucket}/{key}", "required_role": "admin"},
+            )
         require_role(current_user, "admin")  # RBAC: only admins may write or delete objects
 
     if request.method in ("PUT", "POST") and path:

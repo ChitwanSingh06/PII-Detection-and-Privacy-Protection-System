@@ -19,6 +19,8 @@ from config import (  # noqa: E402
     SPACY_MODEL,
 )
 
+from pii_recognizers import postprocess, register_custom_recognizers  # noqa: E402
+
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
@@ -53,6 +55,8 @@ class PIIAnalyzer:
             provider = NlpEngineProvider(nlp_configuration=configuration)
             nlp_engine = provider.create_engine()
             PIIAnalyzer._engine = AnalyzerEngine(nlp_engine=nlp_engine)
+            # Indian + US recognizers (Aadhaar, PIN, addresses, SSN, cards, ZIP, Indian phones)
+            register_custom_recognizers(PIIAnalyzer._engine.registry)
         self.engine = PIIAnalyzer._engine
 
     def analyze(self, text, raise_on_error=False):
@@ -66,6 +70,7 @@ class PIIAnalyzer:
             logging.info("Running PII analysis")
             score_threshold = float(os.getenv("PII_SCORE_THRESHOLD", str(PII_SCORE_THRESHOLD)))
             results = self.engine.analyze(text=text, entities=[], language="en")
+            results = postprocess(text, [r for r in results if r.score >= score_threshold])
             filtered = [
                 {
                     "type": r.entity_type,
@@ -74,7 +79,6 @@ class PIIAnalyzer:
                     "score": r.score,
                 }
                 for r in results
-                if r.score >= score_threshold
             ]
             logging.info(f"Filtered PII entities (score >= {score_threshold})")
             return filtered
