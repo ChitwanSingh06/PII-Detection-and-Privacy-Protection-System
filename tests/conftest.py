@@ -11,6 +11,7 @@ os.environ["SQLITE_PATH"] = os.path.join(_TMP, "test.db")
 os.environ["STORAGE_ROOT"] = os.path.join(_TMP, "storage")
 os.environ["JWT_SECRET"] = "test-secret-key-that-is-at-least-32-characters-long"
 os.environ["JWT_EXPIRE_MINUTES"] = "60"
+os.environ["KAFKA_ENABLED"] = "0"  # existing tests use the original in-request scan; tests/test_kafka.py covers the queue
 
 for p in ("anonymizer", "common", "consumer_analyzer/pii_analyser", "consumer_analyzer/consumer", "proxy-server", "database", "."):
     full = str(ROOT / p)

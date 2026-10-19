@@ -15,11 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import text
 
-<<<<<<< HEAD
 from auth import AuthUser, _audit, get_current_user, require_admin, require_role  # noqa: F401
-=======
-from auth import AuthUser, get_current_user, require_role
->>>>>>> origin/main
 from config import SQLITE_PATH
 from sqlite_db import SqliteModel
 
@@ -29,12 +25,7 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _ENTITY_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,63}$")  # Presidio entity names, e.g. EMAIL_ADDRESS
 
 
-<<<<<<< HEAD
 _admin = require_admin  # admin-only; a denied attempt is written to the audit log
-=======
-def _admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
-    return require_role(user, "admin")
->>>>>>> origin/main
 
 
 def _engine():
@@ -161,15 +152,12 @@ async def _insert_rules(conn, name: str, rules: list[Rule]) -> None:
         )
 
 
-<<<<<<< HEAD
 def _change(action: str, name: str, rules: list) -> dict:
     """Audit details for a policy edit: policy name + entity types / operators only (no data values)."""
     return {"action": action, "policy_name": name,
             "rules": sorted(f"{r.entity_type}:{r.operator_name}" for r in rules)}
 
 
-=======
->>>>>>> origin/main
 def _not_found(name: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"Policy '{name}' not found")
 
@@ -193,49 +181,31 @@ async def get_policy(policy_name: str, _: AuthUser = Depends(_admin)):
 
 
 @router.post("/api/policies", status_code=201)
-<<<<<<< HEAD
 async def create_policy(body: PolicyCreate, admin: AuthUser = Depends(_admin)):
-=======
-async def create_policy(body: PolicyCreate, _: AuthUser = Depends(_admin)):
->>>>>>> origin/main
     async with _engine().begin() as conn:
         if await _rules_of(conn, body.policy_name):
             raise HTTPException(status_code=409, detail=f"Policy '{body.policy_name}' already exists")
         await _insert_rules(conn, body.policy_name, body.rules)
-<<<<<<< HEAD
     await _audit("policy_change", actor=admin.username, details=_change("created", body.policy_name, body.rules))
-=======
->>>>>>> origin/main
     async with _engine().connect() as conn:
         return await _describe(conn, body.policy_name)
 
 
 @router.put("/api/policies/{policy_name}")
-<<<<<<< HEAD
 async def update_policy(policy_name: str, body: PolicyUpdate, admin: AuthUser = Depends(_admin)):
-=======
-async def update_policy(policy_name: str, body: PolicyUpdate, _: AuthUser = Depends(_admin)):
->>>>>>> origin/main
     """Replace ALL rules of the policy. Users assigned to it keep it and see the new rules at once."""
     async with _engine().begin() as conn:
         if not await _rules_of(conn, policy_name):
             raise _not_found(policy_name)
         await conn.execute(text("DELETE FROM policies WHERE policy_name = :n"), {"n": policy_name})
         await _insert_rules(conn, policy_name, body.rules)
-<<<<<<< HEAD
     await _audit("policy_change", actor=admin.username, details=_change("updated", policy_name, body.rules))
-=======
->>>>>>> origin/main
     async with _engine().connect() as conn:
         return await _describe(conn, policy_name)
 
 
 @router.delete("/api/policies/{policy_name}", status_code=204)
-<<<<<<< HEAD
 async def delete_policy(policy_name: str, admin: AuthUser = Depends(_admin)):
-=======
-async def delete_policy(policy_name: str, _: AuthUser = Depends(_admin)):
->>>>>>> origin/main
     async with _engine().begin() as conn:
         if not await _rules_of(conn, policy_name):
             raise _not_found(policy_name)
@@ -246,10 +216,7 @@ async def delete_policy(policy_name: str, _: AuthUser = Depends(_admin)):
                 detail=f"Policy '{policy_name}' is assigned to {', '.join(users)}. Unassign or reassign them first.",
             )
         await conn.execute(text("DELETE FROM policies WHERE policy_name = :n"), {"n": policy_name})
-<<<<<<< HEAD
     await _audit("policy_change", actor=admin.username, details={"action": "deleted", "policy_name": policy_name})
-=======
->>>>>>> origin/main
     return Response(status_code=204)
 
 
@@ -264,11 +231,7 @@ async def list_users(_: AuthUser = Depends(_admin)):
 
 
 @router.put("/api/users/{user_name}/policy")
-<<<<<<< HEAD
 async def assign_policy(user_name: str, body: Assignment, admin: AuthUser = Depends(_admin)):
-=======
-async def assign_policy(user_name: str, body: Assignment, _: AuthUser = Depends(_admin)):
->>>>>>> origin/main
     """Assign (or change) the policy used for this user's GETs and LLM prompts."""
     new_policy = body.policy_name or ""
     async with _engine().begin() as conn:
@@ -283,9 +246,6 @@ async def assign_policy(user_name: str, body: Assignment, _: AuthUser = Depends(
             text("DELETE FROM users WHERE user_name = :u AND rowid != :keep"), {"u": user_name, "keep": ids[0]})
         await conn.execute(
             text("UPDATE users SET policy_name = :p WHERE rowid = :keep"), {"p": new_policy, "keep": ids[0]})
-<<<<<<< HEAD
     await _audit("policy_change", actor=admin.username,
                  details={"action": "assigned", "policy_name": new_policy or None, "user_name": user_name})
-=======
->>>>>>> origin/main
     return {"user_name": user_name, "policy_name": new_policy or None}

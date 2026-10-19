@@ -166,7 +166,7 @@ def test_card_variants(analyzer, v):
     assert has(analyzer, f"Charge card {v} today", "CREDIT_CARD", v), found(analyzer, v)
 
 
-@pytest.mark.parametrize("v", ["4111 1111 1111 1112", "1234 5678 9012 3456", "0000 0000 0000 0000", "4111 1111 1111"])
+@pytest.mark.parametrize("v", ["1234 5678 9012 3456", "0000 0000 0000 0000", "4111 1111 1111"])
 def test_card_invalid_rejected(analyzer, v):
     assert not has(analyzer, f"Charge card {v} today", "CREDIT_CARD")
 
@@ -231,3 +231,27 @@ def test_address_stops_at_sentence_end_and_never_swallows_other_ids(analyzer):
 
 def test_ssn_like_text_is_not_a_house_number(analyzer):
     assert not types(analyzer, "Employee SSN 123-45-6789, Bengaluru") & {"IN_ADDRESS"}
+
+# ---- card formats (spaces / hyphens / NBSP / mixed) -------------------------------------------------------
+@pytest.mark.parametrize("card", [
+    "4111111111111111", "4111 1111 1111 1111", "4111-1111-1111-1111", "4111  1111  1111  1111",
+    "4111\u00a01111\u00a01111\u00a01111", "4111 1111-1111 1111", "5500 0000 0000 0004", "3782 822463 10005",
+    "378282246310005", "6011 1111 1111 1117", "3056 9309 0259 04",
+])
+def test_valid_card_in_any_grouping_is_detected_whole(analyzer, card):
+    assert has(analyzer, f"Payment card {card} on file", "CREDIT_CARD", card)
+
+
+@pytest.mark.parametrize("text", [
+    "ref 4111 1111 1111 1112", "ref 1234 5678 9012 3456", "id 4111 1111 1111 1111 4242",
+])
+def test_invalid_or_oversized_digit_runs_are_not_cards(analyzer, text):
+    assert "CREDIT_CARD" not in types(analyzer, text)
+
+
+def test_bad_luhn_card_is_caught_after_a_card_keyword_and_can_be_switched_off(analyzer, monkeypatch):
+    t = "failed payment on card 4532 8891 0023 7714."
+    assert has(analyzer, t, "CREDIT_CARD", "4532 8891 0023 7714")  # a mistyped card must not leak
+    assert not has(analyzer, "tracking 4532 8891 0023 7714", "CREDIT_CARD")  # no card context: checksum decides
+    monkeypatch.setenv("PII_CARD_ALLOW_BAD_LUHN", "0")
+    assert not has(analyzer, t, "CREDIT_CARD")

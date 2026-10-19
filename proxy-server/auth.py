@@ -6,11 +6,7 @@
 """
 from dataclasses import dataclass
 
-<<<<<<< HEAD
 from fastapi import APIRouter, Depends, HTTPException, Request
-=======
-from fastapi import APIRouter, Depends, HTTPException
->>>>>>> origin/main
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -65,7 +61,6 @@ def require_role(user: AuthUser, *allowed_roles: str) -> AuthUser:
     return user
 
 
-<<<<<<< HEAD
 async def _audit(event_type: str, **kwargs) -> None:
     """Best-effort audit write. Imported lazily (dashboard imports this module). Never stores PII."""
     try:
@@ -88,8 +83,6 @@ async def require_admin(
     return require_role(user, "admin")
 
 
-=======
->>>>>>> origin/main
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=64)
     password: str = Field(..., min_length=1, max_length=128)
@@ -109,7 +102,6 @@ async def login(body: LoginRequest):
         )
 
     # Same generic error for unknown user, wrong password, or an account with no password set.
-<<<<<<< HEAD
     # Audit: the attempted name is only recorded when it is a real account (a mistyped value could be personal data).
     if row is None or not row.password_hash:
         burn_password_check(body.password)
@@ -121,15 +113,6 @@ async def login(body: LoginRequest):
 
     token, expires_in = create_access_token(body.username, row.role)
     await _audit("login", actor=body.username, details={"role": row.role})
-=======
-    if row is None or not row.password_hash:
-        burn_password_check(body.password)
-        raise _unauthorized("Invalid username or password")
-    if not verify_password(body.password, row.password_hash):
-        raise _unauthorized("Invalid username or password")
-
-    token, expires_in = create_access_token(body.username, row.role)
->>>>>>> origin/main
     return {
         "access_token": token,
         "token_type": "bearer",

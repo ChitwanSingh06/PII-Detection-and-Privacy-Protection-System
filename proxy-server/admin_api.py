@@ -103,7 +103,24 @@ async def pii_detection(_: AuthUser = Depends(require_admin), limit: int = Query
             "min_score": round(min(s), 4) if s else None, "max_score": round(max(s), 4) if s else None,
         }
 
-    categories = [{**c, **stat(c["entity_type"])} for c in SUPPORTED_CATEGORIES]
+    # LLM Playground prompts are scanned too. Each forwarded prompt already leaves one event whose details carry
+    # what was DETECTED (types and counts only, whether or not a policy rule covered it); read those back.
+    prompt_rows = await _fetch(
+        "SELECT id, created_at, actor, details FROM dashboard_events WHERE event_type='anonymization' "
+        "AND source='llm_prompt' AND status IN ('ok','original') ORDER BY id DESC")
+    prompt_types: Counter = Counter()
+    prompt_with_pii = 0
+    latest_prompts = []
+    for r in prompt_rows:
+        by_type = (_details(r.details).get("detected") or {}).get("by_entity_type") or {}
+        prompt_types.update({t: n for t, n in by_type.items() if isinstance(n, int)})
+        prompt_with_pii += 1 if by_type else 0
+        if len(latest_prompts) < limit:
+            latest_prompts.append({"id": r.id, "timestamp": r.created_at, "user": r.actor,
+                                   "entity_count": sum(by_type.values()), "by_entity_type": by_type})
+
+    categories = [{**c, **stat(c["entity_type"]), "prompt_count": prompt_types.get(c["entity_type"], 0)}
+                  for c in SUPPORTED_CATEGORIES]
     other = [stat(t) for t in sorted(scores, key=lambda x: (-len(scores[x]), x)) if t not in _CATALOG]
 
     # Latest detection runs (from the persisted events), enriched with the stored spans' offsets/scores.
@@ -136,6 +153,8 @@ async def pii_detection(_: AuthUser = Depends(require_admin), limit: int = Query
         "total_entities": sum(len(e) for e in scanned.values()),
         "detection_runs_total": (totals[0].n or 0) if totals else 0,
         "detection_failures_total": (totals[0].f or 0) if totals else 0,
+        "prompt_scans": {"runs": len(prompt_rows), "with_pii": prompt_with_pii, "entities": sum(prompt_types.values())},
+        "latest_prompts": latest_prompts,
         "score_threshold_note": "Only detections at or above the configured confidence threshold are stored.",
         "categories": categories,
         "other_types": other,

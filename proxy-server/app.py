@@ -30,14 +30,11 @@ for path in (str(ROOT), str(PROXY_DIR), str(CONSUMER_DIR), str(PII_ANALYSER_DIR)
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from config import AN_SVC_URL, SQLITE_PATH, STORAGE_ROOT  # noqa: E402
+from config import AN_SVC_URL, KAFKA_ENABLED, SQLITE_PATH, STORAGE_ROOT  # noqa: E402
 from sqlite_db import SqliteModel  # noqa: E402
 from auth import AuthUser, get_current_user, require_role, router as auth_router  # noqa: E402
 from policies import router as policies_router  # noqa: E402
-<<<<<<< HEAD
 from admin_api import router as admin_router  # noqa: E402
-=======
->>>>>>> origin/main
 from dashboard import (  # noqa: E402
     anonymization_breakdown,
     ensure_schema as ensure_dashboard_schema,
@@ -47,6 +44,7 @@ from dashboard import (  # noqa: E402
     router as dashboard_router,
 )
 from kafka_consumer import LocalUploadTrigger  # noqa: E402
+from kafka_producer import ScanJobProducer, ScanQueueError  # noqa: E402
 
 
 class S3Object(BaseModel):
@@ -64,11 +62,8 @@ app.include_router(auth_router)
 app.include_router(policies_router)
 # Live Dashboard (read-only metrics): /api/dashboard/*. Also before the catch-all.
 app.include_router(dashboard_router)
-<<<<<<< HEAD
 # Admin-only pages' APIs (PII Detection, Analytics, Audit Logs): /api/admin/*. Also before the catch-all.
 app.include_router(admin_router)
-=======
->>>>>>> origin/main
 
 # --- Frontend UI -------------------------------------------------------------
 # Registered BEFORE the catch-all proxy route below so /ui/ is never treated as
@@ -96,6 +91,16 @@ def get_upload_trigger() -> LocalUploadTrigger:
     if _upload_trigger is None:
         _upload_trigger = LocalUploadTrigger()
     return _upload_trigger
+
+
+_scan_producer: ScanJobProducer | None = None
+
+
+def get_scan_producer() -> ScanJobProducer:
+    global _scan_producer
+    if _scan_producer is None:
+        _scan_producer = ScanJobProducer()
+    return _scan_producer
 
 
 def _safe_storage_path(bucket: str, key: str = "") -> Path:
@@ -175,6 +180,18 @@ async def delete_local_object(path: str) -> Response:
 
 
 async def run_pii_analysis(bucket: str, key: str) -> None:
+    if KAFKA_ENABLED:
+        # Queue a scan job; the Kafka worker scans the file and records the detection event.
+        try:
+            await asyncio.to_thread(get_scan_producer().publish, bucket, key)
+        except ScanQueueError:
+            await record_event("detection", status="failed", bucket=bucket, key=key,
+                               details={"failure": "queue_unavailable"})
+            raise HTTPException(
+                status_code=503,
+                detail="File stored, but its scan job could not be queued. Is Kafka running? (docker compose up -d)",
+            )
+        return
     entities = await asyncio.to_thread(get_upload_trigger().on_put, bucket, key)
     # Dashboard metric: entity types/counts only, never the detected values.
     if entities is None:
@@ -273,15 +290,11 @@ LLM_SCRATCH_BUCKET = "__llm_playground__"  # only holds span offsets, never prom
 # an LLM, so these types (the ones the seeded policies already cover, plus IP) are replaced instead.
 # These defaults are never applied to an admin: an admin's effective policy is what the Policy Engine shows.
 # Set LLM_STRICT_PII=1 to also replace every other detected type that has no rule (regular users only).
-<<<<<<< HEAD
 DEFAULT_PII_TYPES = {
     "PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "US_SSN", "US_BANK_NUMBER", "IP_ADDRESS",
     # Indian + US categories (fail-safe for a regular user with no policy)
     "IN_AADHAAR", "IN_PIN_CODE", "IN_ADDRESS", "US_ADDRESS", "US_ZIP_CODE",
 }
-=======
-DEFAULT_PII_TYPES = {"PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD", "US_SSN", "US_BANK_NUMBER", "IP_ADDRESS"}
->>>>>>> origin/main
 LLM_STRICT_PII = os.environ.get("LLM_STRICT_PII", "0") == "1"
 
 

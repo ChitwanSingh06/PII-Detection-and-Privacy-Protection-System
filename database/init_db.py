@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 import argparse
-=======
->>>>>>> origin/main
 import json
 import sqlite3
 import sys
@@ -75,7 +72,6 @@ USER2_POLICY = [
     },
 ]
 
-<<<<<<< HEAD
 # Rules for the Indian + US categories (Aadhaar, PIN, addresses, ZIP). They are NOT part of the default seed, so
 # existing/seeded policies stay exactly as they were. Opt in with
 #   python database/init_db.py --add-new-category-rules
@@ -99,8 +95,6 @@ NEW_CATEGORY_RULES = {
     ],
 }
 
-=======
->>>>>>> origin/main
 # Demo accounts for local testing ONLY. Change or remove them before any real use.
 # (user_name, role, policy_name, password). Admin has no policy, so GETs return the original file.
 DEMO_USERS = [
@@ -119,7 +113,6 @@ def ensure_auth_columns(cur):
         cur.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
 
 
-<<<<<<< HEAD
 def add_new_category_rules(cur):
     """Additive upgrade for existing databases: give the demo policies rules for the new categories.
 
@@ -145,9 +138,6 @@ def create_tables(reset_demo: bool = False, upgrade_policies: bool = False):
     reset_demo=True restores the old behaviour (wipes users and policies, then re-seeds the demo data) and is
     only ever used when explicitly requested with --reset-demo.
     """
-=======
-def create_tables():
->>>>>>> origin/main
     db_path = Path(SQLITE_PATH)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -216,7 +206,6 @@ def create_tables():
         "ON dashboard_events (request_id, event_type) WHERE request_id IS NOT NULL"
     )
 
-<<<<<<< HEAD
     if reset_demo:
         cur.execute("DELETE FROM users")
         cur.execute("DELETE FROM policies")
@@ -243,32 +232,10 @@ def create_tables():
         seeded_policies.append(name)
 
     added = add_new_category_rules(cur) if upgrade_policies else []
-=======
-    cur.execute("DELETE FROM users")
-    cur.execute("DELETE FROM policies")
-
-    for user_name, role, policy_name, password in DEMO_USERS:
-        cur.execute(
-            "INSERT INTO users (user_name, policy_name, password_hash, role) VALUES (?, ?, ?, ?)",
-            (user_name, policy_name, hash_password(password), role),
-        )
-
-    for rule in USER1_POLICY:
-        cur.execute(
-            "INSERT INTO policies (policy_name, policy) VALUES (?, ?)",
-            ("user1_policy", json.dumps(rule)),
-        )
-    for rule in USER2_POLICY:
-        cur.execute(
-            "INSERT INTO policies (policy_name, policy) VALUES (?, ?)",
-            ("user2_policy", json.dumps(rule)),
-        )
->>>>>>> origin/main
 
     conn.commit()
     cur.close()
     conn.close()
-<<<<<<< HEAD
     print(f"SQLite database ready at {db_path}")
     print(f"  demo users added:    {', '.join(seeded_users) or 'none (existing users kept)'}")
     print(f"  demo policies added: {', '.join(seeded_policies) or 'none (existing policies kept)'}")
@@ -288,10 +255,3 @@ if __name__ == "__main__":
                         help="DESTRUCTIVE: wipe users and policies and re-seed the demo data")
     args = parser.parse_args()
     create_tables(reset_demo=args.reset_demo, upgrade_policies=args.add_new_category_rules)
-=======
-    print(f"SQLite tables created; demo users (admin, user1, user2) and sample policies seeded at {db_path}")
-
-
-if __name__ == "__main__":
-    create_tables()
->>>>>>> origin/main

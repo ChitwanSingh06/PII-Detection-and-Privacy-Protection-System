@@ -20,8 +20,8 @@ KNOWN = {"Priya Raman": "PERSON", "priya.raman@acme.in": "EMAIL_ADDRESS", "+91 9
          "4532 8891 0023 7714": "CREDIT_CARD", "123-45-6789": "US_SSN"}
 
 # What each seeded policy (or the no-policy default) must produce for PROMPT.
-USER1_OUT = "Draft a reply to PERSON (<EMAIL>, PHONE_NUMBER) about the failed payment on card **********0023 7714."
-USER2_OUT = "Draft a reply to Priya Raman (*******************, <PHONE>) about the failed payment on card **********0023 7714."
+USER1_OUT = "Draft a reply to PERSON (<EMAIL>, PHONE_NUMBER) about the failed payment on card **** **** **** 7714."
+USER2_OUT = "Draft a reply to Priya Raman (*******************, <PHONE>) about the failed payment on card **** **** **** 7714."
 NO_POLICY_OUT = "Draft a reply to <PERSON> (<EMAIL_ADDRESS>, <PHONE_NUMBER>) about the failed payment on card <CREDIT_CARD>."
 
 
@@ -422,3 +422,20 @@ def test_analyzer_and_writer_default_behaviour_is_unchanged_but_can_raise(tmp_pa
     assert writer.store_pii_results("b", "k", []) is None  # unchanged: logged, not raised
     with pytest.raises(Exception):
         writer.store_pii_results("b", "k", [], raise_on_error=True)
+
+
+def test_prompt_scan_is_counted_on_the_pii_detection_page(client, user1_h, admin_h, env):
+    def page():
+        return client.get("/api/admin/pii-detection?limit=50", headers=admin_h).json()["data"]
+
+    before = page()
+    assert chat(client, user1_h, PROMPT).status_code == 200
+    after = page()
+    assert after["prompt_scans"]["runs"] == before["prompt_scans"]["runs"] + 1
+    cats = {c["entity_type"]: c["prompt_count"] for c in after["categories"]}
+    old = {c["entity_type"]: c["prompt_count"] for c in before["categories"]}
+    for t in ("PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"):
+        assert cats[t] == old[t] + 1
+    top = after["latest_prompts"][0]
+    assert top["user"] == "user1" and top["by_entity_type"]["CREDIT_CARD"] == 1
+    assert not any(p in json.dumps(after) for p in PII)  # types and counts only, never the text

@@ -129,7 +129,12 @@ class PIIProcessor:
             logging.error(f"Skipping analysis; object not found: {bucket_name}/{object_key}")
             return None
         pii_entities = self.analyzer.analyze(text)
-        self.db.store_pii_results(bucket_name, object_key, pii_entities)
+        try:
+            self.db.store_pii_results(bucket_name, object_key, pii_entities, raise_on_error=True)
+        except Exception:  # noqa: BLE001 - already logged by the writer
+            # Reporting success here would put a detection on the dashboard that has no stored result behind it.
+            logging.error(f"Scan result could not be stored for {bucket_name}/{object_key}")
+            return None
         logging.info(f"PII entities stored: {pii_entities}")
         return pii_entities  # spans only (type/start/end/score); used for dashboard counts
 

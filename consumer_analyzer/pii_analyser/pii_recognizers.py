@@ -17,6 +17,8 @@ Design rules for precision:
   * Bare 5/6 digit numbers are never postal codes without PIN/ZIP/state/city context.
   * The recognizers only look at text; nothing here logs or stores matched values.
 """
+import os
+import os
 import re
 from typing import Iterable, Optional
 
@@ -172,7 +174,7 @@ class IndianPhoneRecognizer(_Recognizer):
             if _same_digit_run(d):
                 continue
             ctx = _PHONE_CTX.search(_before(text, m.start(), 30))
-            grouped = bool(re.search(r"[ .\-]", m.group()))
+            grouped = bool(re.search(r"[ \u00a0.\-]", m.group()))
             add(m, 0.85 if ctx else (0.65 if grouped else 0.4))
         for m in _IN_LANDLINE.finditer(text):
             std, sub = m.group("std"), _digits(m.group("sub"))
@@ -551,14 +553,9 @@ def _card_brand_ok(d: str) -> bool:
 
 
 _CARD_CTX = re.compile(r"\b(?:card|visa|mastercard|amex|debit|credit|cc|pan|cvv|payment|ending)\b")
-_CARD = re.compile(
-    r"(?<![\d\-])(?<!\d[ .])(?:"
-    r"(?P<amex>3[47]\d{2}(?P<a>[ .\-]?)\d{6}(?P=a)\d{5})|"
-    r"(?P<diners>3[0689]\d{2}(?P<d>[ .\-]?)\d{6}(?P=d)\d{4})|"
-    r"(?P<std>\d{4}(?P<s>[ .\-]?)\d{4}(?P=s)\d{4}(?P=s)\d{4}(?:(?P=s)?\d{1,3})?)|"
-    r"(?P<v13>4\d{3}(?P<t>[ .\-]?)\d{3}(?P=t)\d{3}(?P=t)\d{3})"
-    r")(?![\d\-])(?![ .]\d)"
-)
+# Any run of 13-19 digits split by at most two separator characters (space, NBSP, dot, hyphen) between digits.
+# Brand prefix + length + Luhn (checked in _find) decide; the shape here only has to be permissive.
+_CARD = re.compile(r"(?<![\d\-])(?<!\d[ \u00a0.])\d(?:[ \u00a0.\-]{0,2}\d){12,18}(?![\d\-])(?![ \u00a0.]\d)")
 
 
 class StrictCardRecognizer(_Recognizer):
@@ -570,10 +567,17 @@ class StrictCardRecognizer(_Recognizer):
     def _find(self, text):
         for m in _CARD.finditer(text):
             d = _digits(m.group())
-            if len(set(d)) == 1 or not _card_brand_ok(d) or not luhn_valid(d):
+            if len(set(d)) == 1 or not _card_brand_ok(d):
                 continue
-            grouped = bool(re.search(r"[ .\-]", m.group()))
+            grouped = bool(re.search(r"[ \u00a0.\-]", m.group()))
             ctx = _CARD_CTX.search(_before(text, m.start(), 30))
+            if not luhn_valid(d):
+                # A card-shaped number (real brand prefix + length) right after "card" / "visa" / ... that fails the
+                # checksum is almost always a mistyped card, and leaking it is worse than a false positive, so it is
+                # kept at a lower score. Never without that context. PII_CARD_ALLOW_BAD_LUHN=0 turns this off.
+                if ctx and os.environ.get("PII_CARD_ALLOW_BAD_LUHN", "1") != "0":
+                    yield "CREDIT_CARD", m.start(), m.end(), 0.7
+                continue
             score = 0.95 if ctx else (0.9 if grouped else 0.85)
             yield "CREDIT_CARD", m.start(), m.end(), score
 

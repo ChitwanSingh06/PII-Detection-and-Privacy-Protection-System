@@ -6,14 +6,14 @@ This local version keeps the original detection and policy-enforcement flow, but
 ## Features
 - **Inline Analysis** – Automatically scans for sensitive information and stores entity metadata during object `PUT` operations.
 - **Real-time Policy Enforcement** – Applies masking, redaction, or replace actions dynamically during object `GET` based on the requesting user's policy. The original file is never modified.
-- **Local Upload Trigger** – PII analysis starts automatically after a local upload (replaces S3 `PUT` events).
+- **Kafka scan queue** – after a local upload the proxy queues a scan job on Kafka and a separate worker runs the PII analysis (set `KAFKA_ENABLED=0` to scan inside the upload request instead).
 - **Pluggable Detection Framework** – Uses Microsoft Presidio for entity resolution and confidence scores.
 - **Compatible HTTP API** – The proxy still exposes a catch-all `/{bucket}/{key}` API for GET/PUT/DELETE.
 - **Authentication & RBAC** – Username/password login returns a signed JWT. Every object and LLM request must carry `Authorization: Bearer <token>`; the caller's identity and role come only from the verified token.
 
 ## Local architecture
 1. `proxy-server` stores and retrieves files under `data/storage/`.
-2. After each `PUT`, `consumer_analyzer` runs Presidio and writes PII metadata to SQLite.
+2. After each `PUT`, the proxy publishes a scan job to Kafka (`pii-scan-jobs`). The Kafka worker (`consumer_analyzer/consumer/kafka_consumer.py`) consumes it, runs Presidio and writes the PII metadata to SQLite and the detection event to the dashboard log. Until the worker has processed a job the file shows as unscanned. If Kafka is unreachable the upload returns `503` (the file is stored, a failed detection event is logged).
 3. On `GET`, the proxy takes the username from the verified JWT, loads that user's policy from SQLite and calls the anonymizer gRPC service.
 4. The anonymizer applies mask/redact/replace in memory and returns the transformed bytes.
 
@@ -40,6 +40,9 @@ Copy `.env.example` to `.env` and **set `JWT_SECRET`** (see [Authentication & au
 | `JWT_SECRET` | *(none; a random temporary secret is generated and a warning is logged)* |
 | `JWT_ALGORITHM` | `HS256` (`HS384`/`HS512` also allowed) |
 | `JWT_EXPIRE_MINUTES` | `60` |
+| `KAFKA_ENABLED` | `1` (`0` = scan inside the upload request, no broker or worker) |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` |
+| `KAFKA_SCAN_TOPIC` / `KAFKA_GROUP_ID` | `pii-scan-jobs` / `pii-scan-workers` |
 
 `database/init_db.py` seeds the demo users below plus the sample mask/redact/replace policies. Users with no policy (including `admin`) receive the original file. Re-running it is **safe**: it only creates missing tables/columns and adds demo users/policies that do not exist yet; existing rows are never modified or deleted. Two explicit flags: `--add-new-category-rules` (additive: adds Aadhaar / PIN / address / ZIP rules to the demo policies where a type has no rule yet) and `--reset-demo` (DESTRUCTIVE: the old wipe-and-reseed behaviour). On a database created before authentication existed it also adds the `password_hash` and `role` columns.
 
@@ -91,6 +94,47 @@ PYTHONPATH="common:consumer_analyzer/pii_analyser:consumer_analyzer/consumer:pro
 
 The API listens on `http://127.0.0.1:8080`.
 
+Start Kafka (needs Docker) and the Kafka worker, each in its own terminal, before uploading files:
+
+```bash
+docker compose up -d          # single-node Kafka on localhost:9092
+PYTHONPATH="common:consumer_analyzer/pii_analyser:consumer_analyzer/consumer:proxy-server:$PYTHONPATH" python consumer_analyzer/consumer/kafka_consumer.py
+```
+
+### Windows (PowerShell), from the project root, one terminal per step
+
+```powershell
+# One-time setup (Python 3.11)
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1          # if blocked: Set-ExecutionPolicy -Scope Process Bypass
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+Copy-Item .env.example .env            # then set JWT_SECRET in .env
+python database/init_db.py
+
+# Terminal 1: Kafka
+docker compose up -d
+docker compose ps                      # State should be "running"
+
+# Terminal 2: anonymizer
+.\.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = "anonymizer;common"
+python -m anonymizer
+
+# Terminal 3: API + UI
+.\.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = "common;consumer_analyzer/pii_analyser;consumer_analyzer/consumer;proxy-server"
+python proxy-server/app.py
+
+# Terminal 4: Kafka worker
+.\.venv\Scripts\Activate.ps1
+$env:PYTHONPATH = "common;consumer_analyzer/pii_analyser;consumer_analyzer/consumer;proxy-server"
+python consumer_analyzer/consumer/kafka_consumer.py
+
+# Stop: Ctrl+C in terminals 2-4, then
+docker compose down
+```
+
 ## Example usage
 
 Log in and keep the tokens (admin uploads; users read through their policy):
@@ -102,7 +146,7 @@ login() { curl -s -X POST $BASE/api/auth/login -H 'Content-Type: application/jso
 ADMIN=$(login admin 'Admin@12345'); USER1=$(login user1 'User1@12345'); USER2=$(login user2 'User2@12345')
 ```
 
-Upload a text object as admin (analysis runs before the response returns; the first upload also loads the spaCy model):
+Upload a text object as admin (the Kafka worker scans it right after the response returns; with `KAFKA_ENABLED=0` the scan runs before the response; the first scan also loads the spaCy model):
 
 ```bash
 curl -X PUT "$BASE/demo-bucket/sample.txt" -H "Authorization: Bearer $ADMIN" \
@@ -328,5 +372,5 @@ Everything comes from SQLite (`pii_objects`, `dashboard_events`, `policies`, `us
 ## Tests
 
 ```bash
-python -m pytest -q          # 261 tests, uses temp DB/storage, never touches data/pii.db
+python -m pytest -q          # 292 tests (incl. tests/test_kafka.py, no broker needed), uses temp DB/storage, never touches data/pii.db
 ```

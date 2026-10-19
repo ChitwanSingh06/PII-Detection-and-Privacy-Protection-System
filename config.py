@@ -32,3 +32,10 @@ if not JWT_SECRET:
     )
 elif len(JWT_SECRET) < 32:
     logging.getLogger(__name__).warning("JWT_SECRET is shorter than 32 characters; use a longer secret.")
+
+# --- Kafka (queue of PII scan jobs: the proxy produces, consumer_analyzer/consumer/kafka_consumer.py consumes) ---
+# KAFKA_ENABLED=0 keeps the original behaviour (the upload request scans the file itself, no broker needed).
+KAFKA_ENABLED = (os.environ.get("KAFKA_ENABLED") or "1") == "1"
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS") or "localhost:9092"
+KAFKA_SCAN_TOPIC = os.environ.get("KAFKA_SCAN_TOPIC") or "pii-scan-jobs"
+KAFKA_GROUP_ID = os.environ.get("KAFKA_GROUP_ID") or "pii-scan-workers"

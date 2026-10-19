@@ -304,3 +304,22 @@ def test_llm_uses_edited_policy(client, admin_h, user1_h, monkeypatch):
     client.put("/api/policies/user1_policy", headers=admin_h, json={"rules": [RULE_SSN]})
     client.post("/api/llm/chat", json=body, headers=user1_h)
     assert seen[0][0] == "PERSON" and seen[1] == ["US_SSN"]
+
+# ---- card masking counts digits, never separators ---------------------------------------------------------
+@pytest.mark.parametrize("card,params,expected", [
+    ("4111 1111 1111 1111", {"chars_to_mask": 10, "from_end": False, "masking_char": "*"}, "**** **** **** 1111"),
+    ("4111-1111-1111-1111", {"chars_to_mask": 10, "from_end": False, "masking_char": "*"}, "****-****-****-1111"),
+    ("4111111111111111", {"chars_to_mask": 10, "from_end": False, "masking_char": "*"}, "************1111"),
+    ("4111 1111 1111 1111", {"chars_to_mask": 16, "from_end": False, "masking_char": "#"}, "#### #### #### ####"),
+])
+def test_card_mask_hides_all_but_last_four_digits(card, params, expected):
+    from types import SimpleNamespace
+    from google.protobuf.struct_pb2 import Struct
+    from anonymizer.pii_anonymizer import PIIAnonymizer
+
+    p = Struct()
+    p.update(params)
+    policy = [SimpleNamespace(entityType="CREDIT_CARD", operatorName="mask", operatorParams=p)]
+    meta = [{"type": "CREDIT_CARD", "start": 5, "end": 5 + len(card), "score": 0.95}]
+    out = PIIAnonymizer().anonymize_data(object_data=f"Card {card} ok", policy_map=policy, pii_metadata=meta)
+    assert out == f"Card {expected} ok"

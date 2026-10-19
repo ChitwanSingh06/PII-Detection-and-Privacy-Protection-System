@@ -389,17 +389,11 @@ def test_existing_data_untouched_by_schema_init():
 
 
 def test_overlapping_spans_counted_as_presidio_resolves_them(client, admin_h, user1_h, env, monkeypatch):
-<<<<<<< HEAD
     """Spans seen in a live run: spaCy DATE_TIME (0.85, no policy rule) covers 'Card 4111-...' and CONTAINS the
     CREDIT_CARD (1.0, which user1's policy masks). Plain Presidio would drop the contained card span and return
     the card number UNMASKED; conflict resolution is policy-aware (a span without a rule cannot swallow one
     with a rule), so the card IS masked together with the PERSON.
     Detection stats report the stored spans as-is; anonymization stats report what was applied."""
-=======
-    """Spans seen in a live run: spaCy DATE_TIME (0.85) covers 'Card 4111-...' and CONTAINS the CREDIT_CARD
-    (1.0). Presidio drops the contained card span, keeps DATE_TIME (no rule), so only PERSON is transformed.
-    Detection stats report the stored spans as-is; anonymization stats report what Presidio applied."""
->>>>>>> origin/main
     import app as proxy_app
 
     body = "Card 4111-1111-1111-1111 owned by Jane Doe"
@@ -422,7 +416,6 @@ def test_overlapping_spans_counted_as_presidio_resolves_them(client, admin_h, us
     pr = get(client, "/api/dashboard/detection", admin_h)["data"]["protection"]
     assert pr["uncovered_entity_types"] == [{"entity_type": "DATE_TIME", "count": 1}]
 
-<<<<<<< HEAD
     got = client.get("/b1/overlap.txt", headers=user1_h)
     assert "4111-1111-1111-1111" not in got.text  # the card is masked, not swallowed by DATE_TIME
     assert "Jane Doe" not in got.text
@@ -430,13 +423,6 @@ def test_overlapping_spans_counted_as_presidio_resolves_them(client, admin_h, us
     assert a["entities_anonymized"] == 2
     assert {x["name"]: x["count"] for x in a["by_entity_type"]} == {"PERSON": 1, "CREDIT_CARD": 1}
     assert {x["name"]: x["count"] for x in a["by_operator"]} == {"replace": 1, "mask": 1}
-=======
-    client.get("/b1/overlap.txt", headers=user1_h)
-    a = get(client, "/api/dashboard/anonymization", admin_h)["data"]
-    assert a["entities_anonymized"] == 1
-    assert a["by_entity_type"] == [{"name": "PERSON", "count": 1}]
-    assert a["by_operator"] == [{"name": "replace", "count": 1}]
->>>>>>> origin/main
 
 
 # ====================================================================================================
